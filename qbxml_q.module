@@ -1,0 +1,348 @@
+<?php
+// $Id$
+// namespace Drupal\qbwc_interface;
+// use Drupal\qbwc_interface;
+
+require_once 'qbxml_q.inc';
+
+/**
+ * @file
+ * QB XML test module
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function qbxml_q_menu() {
+  $items['admin/config/enterprise/qbxml_q_admin'] = array(
+    'title' => 'QBXML Q admin',
+    'description' => 'qbxml_q management configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('qbxml_q_admin_settings_form'),
+    'access arguments' => array('access administration pages'),
+    'file' => 'qbxml_q.admin.inc',
+    'file path' => drupal_get_path('module', 'qbxml_q'),
+  );
+  return $items;
+}
+
+
+/**
+ * Implements hook_help().
+ */
+function qbxml_q_help($path, $arg) {
+  switch ($path) {
+    case 'admin/settings/qbxml_q':
+      return t('Configure the message queue directory for QBXML Queue module.');
+
+    case 'admin/help#qbxml_qproc':
+      $output = '<p>' . t('This is help text for the qbxml_q help page') . '</p>';
+      return $output;
+  }
+    return FALSE;
+}
+
+
+/**
+ * Implements hook_views_api().
+ */
+function qbxml_q_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'qbxml_q') . '/views',
+    'template path' => drupal_get_path('module', 'qbxml_q') . '/views/tpl',
+  );
+}
+
+
+/**
+ * Implements hook_hook_info();
+ */
+function qbwml_q_hook_info() {
+  $hooks[ QBXML_Q_HOOK_IN ] = array( 'group' => 'qbxml_q' );
+  $hooks[ QBXML_Q_HOOK_PROCESSOR ] = array( 'group' => 'qbxml_q' );
+}
+
+
+/**
+ * Implements hook_qbwc_sendRequestXML().
+ */
+function qbxml_q_qbwc_sendRequestXML($ticket=NULL, $company=NULL, $strCompanyFileName,
+                                         $qbXMLCountry, $qbXMLMajorVers, $qbXMLMinorVers) {
+  $ret = NULL;
+  if( $ticket ) {
+    $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
+    if( $item = $queue->claimItem() ) {
+      $ret = $item->data;
+      $queue->deleteItem($item);
+    }
+  }
+  return $ret ? $ret : '';
+}
+
+
+function qbxml_q_get_furi()
+{ $furi = variable_get( QBXML_Q_FURI );
+  $furi = rtrim( $furi, '/' );
+  if( !file_prepare_directory($furi, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY) ) {
+    $furi = "private://";
+    variable_set( QBXML_Q_FURI, $furi );
+    return( $furi );
+  }
+  return( $furi . '/' );
+}
+
+
+/*
+ * Queue a set of requests
+ * parameter requestparams is pretty much the onError parameter in the QBXMLMsgsRq tag, error recovery will add newMessageSetID parameter
+ * parameter requestitems is array of
+ * [ 'qbxml' => string of request w. @requestID to be substituted as generated,
+ *   'callback' => name of callback function to process response,
+ * ]
+*/
+function _qbxml_q_outgoing_request( $requestparams, $requestitems ) {
+  $qbxml_wrapper_header = '<?xml version="1.0"?><?qbxml version="9.0"?><QBXML><QBXMLMsgsRq' .
+    ($requestparams ? (' ' . $requestparams) : '') . '>';
+  $qbxml_wrapper_footer = '</QBXMLMsgsRq></QBXML>';
+  $xmlstr = '';
+
+  foreach( $requestitems as $item ) {
+    // ignore empty requests
+    if( $str = $item['qbxml'] ) {
+      // set callback in database
+      $requestID = db_insert('qbxml_q')
+        ->fields(array(
+          'timestamp' => REQUEST_TIME,
+          'callback' => $item['callback'],
+        ))
+        ->execute();
+      $filename = qbxml_q_get_furi() . $requestID . QBXML_Q_RQ;
+      file_unmanaged_save_data( $str, $filename );
+
+      $xmlstr .= strtr( $item['qbxml'], array( '[@requestid]' => $requestID ) );
+    }
+  }
+
+  if( $xmlstr ) {
+    $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
+    $qbxml = $qbxml_wrapper_header . $xmlstr . $qbxml_wrapper_footer;
+    watchdog( 'QBXML_Q', 'qbxml=(' . htmlspecialchars($qbxml) . ')' );
+    $item = $queue->createItem( $qbxml );
+    watchdog( 'QBXML_Q', '$item=(' . _var_dump2str( $item ) . ')' );
+    return( TRUE );
+  }
+  return( FALSE );
+}
+
+
+/*
+ * Implements hook_qbwc_receiveResponseXML().
+ */
+function qbxml_q_qbwc_receiveResponseXML($ticket, $response = NULL, $hresult, $message) {
+  $queue_out = DrupalQueue::get(QBXML_Q_OUT, TRUE);
+
+  if( !$response ) {
+    watchdog( 'QBXML_Q', 'ReceiveResponse no response returning 0' );
+    return 0; // might should be 100
+  }
+
+  if( $hresult ) {
+    // error has happened and is described in hresult and message
+  }
+  else {
+    qbxml_q_process_incoming( $response );
+  }
+
+  return( $queue_out->numberOfItems() ? 20 : 100 );
+}
+
+
+/*
+ *  Implements hook_cron_queue_info().
+function qbxml_q_cron_queue_info(){
+  $queues[QBXML_Q_IN] = array(
+    'worker callback' => 'qbxml_q_process_incoming',
+    'time' => 15,
+  );
+  return $queues;
+}
+ */
+
+
+/*
+ * Delete saved request archive and database entry after successful response has been received
+*/
+function qbxml_q_deleterequest( $requestID ) {
+  db_delete('qbxml_q')->condition('requestID', $requestID)->execute();
+  file_unmanaged_delete(qbxml_q_get_furi() . $requestID . QBXML_Q_RQ);
+}
+
+
+/*
+ * Worker callback to process incoming QBXML responses
+ */
+function qbxml_q_process_incoming( $response ) {
+  $queue_in = NULL;
+
+  if( $qbxml_info = simplexml_load_string($response) ) { // use PHP builtin extension libxml
+    foreach ($qbxml_info->QBXMLMsgsRs->children() as $responsenode) {
+      $item = new stdClass();
+
+      $item->node = $responsenode;
+      $item->name = $responsenode->getname();
+      $item->requestID = $responsenode['requestID'];
+      $source = db_query(
+        "SELECT * FROM {qbxml_q} WHERE requestID = :requestID",
+        array( ':requestID' => $item->requestID ) )
+        ->fetchObject();
+      if( !$source ) {
+        watchdog( 'QPROC_IN', 'Unexpected incoming requestID ' . $item->requestID . '' );
+        continue;
+      }
+
+      // $callback_json = db_query('SELECT q.callback FROM {qbxml_q} q WHERE q.requestID = :requestID', array(':requestID' => $item->requestID))->fetchField();
+      $item->callback = json_decode($source->callback);
+
+      // send to hook that does generic processing
+      if (sizeof(module_implements(QBXML_Q_HOOK_IN)) > 0) {
+        // Call all modules that implement the hook, and let them make changes to $responsenode.
+        if (implode('', module_invoke_all(QBXML_Q_HOOK_IN, $responsenode))) {
+          qbxml_q_deleterequest( $item->requestID );
+           continue; // hook functions should only return something if they have claimed the data.
+        }
+      }
+
+      if (is_object($item->callback)) {
+        if ($item->callback->callback) {
+          if ($ret = call_user_func($item->callback->callback, $item)) {
+            qbxml_q_deleterequest( $item->requestID );
+            continue;
+          }
+          watchdog('QPROC_IN', 'after call_user_func');
+        }
+
+      }
+//      watchdog( 'QPROC_Q', 'about to invoke rules event' );
+      // if processing gets to this point, the node has not been processed
+      // todo: save to file?
+      // if( !$queue_in ) {
+//        $queue_in = DrupalQueue::get(QBXML_Q_IN, TRUE);
+//      }
+//      $nonprocesseditem->name = $name;
+//      $queue_in->createItem($response); // it is possible to someday put incoming items into a queue to be processed by cron
+//      rules_invoke_event(QBXML_Q_EVENT_IN, $requestID, $name, $responsenode, $callback_params);
+
+      watchdog( 'QPROC_IN', "didn't die" );
+      $filename = qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
+      file_unmanaged_save_data($item->node->asXML(), $filename);
+      // this leaves copy of request, response, and database entry all intact. Something will need to clean up
+    }
+  }
+}
+
+
+/*
+ * Implements hook_feeds_after_import()
+ */
+function qbxml_q_feeds_after_import(FeedsSource $source) {
+  watchdog( 'POST_IMPORT', 'source=' . _var_dump2str($source) );
+  if (isset($source->exception)) {
+    watchdog( 'POST_IMPORT', 'exception=' . _var_dump2str($source->exception) );
+      watchdog('QBXML_Q', 'An exception occurred during importing!');
+  }
+  else {
+    $class = get_class($source->importer->fetcher);
+    if ($class == 'FeedsFileFetcher') {
+      if (strpos($source->id, QBXML_Q_FEEDS_PREFIX) !== FALSE) {
+        $filename = $source->getConfig()[ 'FeedsFileFetcher' ][ 'source' ];
+        file_unmanaged_delete($filename);
+      }
+    }
+  }
+}
+
+
+/*
+ * Basic callback to process import requests using a Feeds importer
+ */
+function qbxml_q_qbxml_q_process_incoming( $item ){
+  if( !$item ) {
+    return( FALSE );
+  }
+  $targetfeedid = isset( $item->callback_params->feed_prefix ) ? $item->callback_params->feed_prefix : QBXML_Q_FEEDS_PREFIX;
+  $targetfeedid .= strtolower($item->name);
+  if( isset(_feeds_importer_digest()[$targetfeedid]) && ($source = feeds_source( $targetfeedid )) ) {
+    if( $source->importer->fetcher->hasSourceConfig() ) {
+      $class = get_class($source->importer->fetcher);
+      if ($class == 'FeedsFileFetcher') {
+        // $fetcherconfig = $source->importer->fetcher->getConfig();
+        $sourceconfig = $source->getConfig();
+
+        $filename = qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
+        $sourceconfig[ 'FeedsFileFetcher' ][ 'source' ] = $filename;
+        file_unmanaged_save_data($item->node->asXML(), $filename);
+        $source->importer->addConfig( array( 'process_in_background' => TRUE ) );
+        $source->setConfig($sourceconfig);
+
+        $source->startImport();
+        // while( FEEDS_BATCH_COMPLETE != $source->import() ); // use this to process if process_in_background not set above
+        return (TRUE);
+      }
+    }
+  }
+  // Didn't process
+  return( FALSE );
+}
+
+
+/**
+ * Themes a QBXML field
+ */
+/**
+ * Implements hook_themes_enabled().
+ *
+function theme_qbxml_field() {
+
+}
+*/
+
+
+/**
+ * Implements hook_theme().
+ *
+ *
+
+function qbxml_q_theme($existing, $type, $theme, $path) {
+  return array(
+    'node--article-qbxml' => array(
+      'variables' => array(
+        'onError' => array( 'continueOnError')
+      ),
+      'function' => a
+    )
+  );
+}
+ */
+
+
+/**
+ * Implements hook_theme_registry_alter().
+
+function qbxml_q_theme_registry_alter(&$theme_registry) {
+  // Defined path to the current module.
+  $module_path = drupal_get_path('module', 'qbxml_q');
+  // Find all .tpl.php files in this module's folder recursively.
+  $template_file_objects = drupal_find_theme_templates($theme_registry, '.tpl.php', $module_path);
+  // Iterate through all found template file objects.
+  foreach ($template_file_objects as $key => $template_file_object) {
+    // If the template has not already been overridden by a theme.
+    if (!isset($theme_registry[$key]['theme path']) || !preg_match('#/themes/#', $theme_registry[$key]['theme path'])) {
+      // Alter the theme path and template elements.
+      $theme_registry[$key]['theme path'] = $module_path;
+      $theme_registry[$key] = array_merge($theme_registry[$key], $template_file_object);
+      $theme_registry[$key]['type'] = 'module';
+    }
+  }
+}
+ */
