@@ -8,7 +8,7 @@
 
 // Filesystem access 
 // Incoming and outgoing QBXML requests and responses are stored in this directory.
-define( 'QBXML_Q_FURI', 'qbxml_q_furi' ); // URI to use for stashing qbxml requests in and out
+define( 'QBXML_Q_FURI', 'qbxml_q' ); // URI to use for stashing qbxml requests in and out
 
 // The files are stored with a prefix, the dynamic request id, and a suffix
 define( 'QBXML_Q_RQ', '_rq.xml' ); // request format
@@ -19,7 +19,7 @@ define( 'QBXML_Q_FEEDS_PREFIX', 'qbxml_import_' ); // default prefix for machine
  * they are added to the queue.
  * Hooks should return 0 to allow processing to continue, anything else to interrupt processing
  */
-define( 'QBXML_Q_HOOK_IN', 'qbxml_q_all_incoming' );
+define( 'QBXML_Q_HOOK_PREPROCESS', 'qbxml_q_preprocess' );
 // the hook below simply registers potential incoming processors
 define( 'QBXML_Q_HOOK_PROCESSOR', 'qbxml_q_process_incoming' );
 
@@ -29,12 +29,5 @@ define( 'QBXML_Q_IN', 'qbxml_q_in' );
 
 // Rules events implemented
 define( 'QBXML_Q_EVENT_IN', 'qbxml_q_event_incoming_response' );
-
-// Classes implemented
-class qbxml_q_incoming {
-  public function process( $xmlmsg, $params = NULL ) {
-    
-  }
-}
 
 

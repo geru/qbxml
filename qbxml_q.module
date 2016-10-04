@@ -14,7 +14,20 @@ require_once 'qbxml_q.inc';
  * Implements hook_menu().
  */
 function qbxml_q_menu() {
-  $items['admin/config/enterprise/qbxml_q_admin'] = array(
+  $items['admin/config/enterprise/qb/qbxml'] = array(
+      'title' => 'QBXML',
+      'description' => 'QBXML functionality',
+      'weight' => -8,
+      'type' => MENU_NORMAL_ITEM,
+      // Page callback, etc. need to be added here.
+      'description' => 'Accounting system configuration',
+      'page callback' => 'system_admin_menu_block_page', // we should implement this function in system.admin.inc file
+      'access arguments' => array('administer site configuration'),
+      'file' => 'system.admin.inc', // don't forget to add the file and path
+      'position' => 'right',
+      'parent' => 'admin/config/enterprise',
+  );
+  $items['admin/config/enterprise/qb/qbxml/admin'] = array(
     'title' => 'QBXML Q admin',
     'description' => 'qbxml_q management configuration',
     'page callback' => 'drupal_get_form',
@@ -22,6 +35,7 @@ function qbxml_q_menu() {
     'access arguments' => array('access administration pages'),
     'file' => 'qbxml_q.admin.inc',
     'file path' => drupal_get_path('module', 'qbxml_q'),
+    'type' => MENU_NORMAL_ITEM,
   );
   return $items;
 }
@@ -45,7 +59,6 @@ function qbxml_q_help($path, $arg) {
 
 /**
  * Implements hook_views_api().
- */
 function qbxml_q_views_api() {
   return array(
     'api' => 3,
@@ -53,6 +66,7 @@ function qbxml_q_views_api() {
     'template path' => drupal_get_path('module', 'qbxml_q') . '/views/tpl',
   );
 }
+*/
 
 
 /**
@@ -64,9 +78,18 @@ function qbwml_q_hook_info() {
 }
 
 
+function _qbxml_q_get_furi()
+{ $furi = variable_get( QBXML_Q_FURI, 'private://qbxml_q' );
+  if( !file_prepare_directory($furi, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY) ) {
+    $furi = "private://";
+    variable_set( QBXML_Q_FURI, $furi );
+  }
+  return( $furi . '/' );
+}
+
+
 /**
  * Implements hook_qbwc_sendRequestXML().
- */
 function qbxml_q_qbwc_sendRequestXML($ticket=NULL, $company=NULL, $strCompanyFileName,
                                          $qbXMLCountry, $qbXMLMajorVers, $qbXMLMinorVers) {
   $ret = NULL;
@@ -79,19 +102,62 @@ function qbxml_q_qbwc_sendRequestXML($ticket=NULL, $company=NULL, $strCompanyFil
   }
   return $ret ? $ret : '';
 }
-
-
-function qbxml_q_get_furi()
-{ $furi = variable_get( QBXML_Q_FURI );
-  $furi = rtrim( $furi, '/' );
-  if( !file_prepare_directory($furi, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY) ) {
-    $furi = "private://";
-    variable_set( QBXML_Q_FURI, $furi );
-    return( $furi );
+*/
+function qbxml_q_qbwc_sendRequestXML($bookkey, $sendRequestXML, $company) {
+  $ret = NULL;
+  $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
+  if( $item = $queue->claimItem() ) {
+    $ret = $item->data;
+    $queue->deleteItem($item);
   }
-  return( $furi . '/' );
+  return $ret ? $ret : '';
 }
 
+
+/**
+ * Formats XML elements.
+ *
+ * @param $array
+ *   An array where each item represents an element and is either a:
+ *   - (key => value) pair (<key>value</key>)
+ *   - Associative array with fields:
+ *     - 'key': element name
+ *     - 'value': element contents
+ *     - 'attributes': associative array of element attributes
+ *     - 'encoded': TRUE if 'value' is already encoded
+ *
+ * In both cases, 'value' can be a simple string, or it can be another array
+ * with the same format as $array itself for nesting.
+ *
+ * If 'encoded' is TRUE it is up to the caller to ensure that 'value' is either
+ * entity-encoded or CDATA-escaped. Using this option is not recommended when
+ * working with untrusted user input, since failing to escape the data
+ * correctly has security implications.
+ */
+function qbxml_q_format_xml_elements($array) {
+  $output = '';
+  foreach ($array as $key => $value) {
+    if (is_numeric($key)) {
+      if ($value['key']) {
+        $output .= '<' . $value['key'];
+        if (isset($value['attributes']) && is_array($value['attributes'])) {
+          $output .= drupal_attributes($value['attributes']);
+        }
+
+        if (isset($value['value']) && $value['value'] != '') {
+          $output .= '>' . (is_array($value['value']) ? format_xml_elements($value['value']) : (!empty($value['encoded']) ? $value['value'] : check_plain($value['value']))) . '</' . $value['key'] . ">\n";
+        }
+        else {
+          $output .= " />\n";
+        }
+      }
+    }
+    else {
+      $output .= '<' . $key . '>' . (is_array($value) ? format_xml_elements($value) : $value) . "</$key>\n";
+    }
+  }
+  return $output;
+}
 
 /*
  * Queue a set of requests
@@ -101,35 +167,14 @@ function qbxml_q_get_furi()
  *   'callback' => name of callback function to process response,
  * ]
 */
-function _qbxml_q_outgoing_request( $requestparams, $requestitems ) {
-  $qbxml_wrapper_header = '<?xml version="1.0"?><?qbxml version="9.0"?><QBXML><QBXMLMsgsRq' .
-    ($requestparams ? (' ' . $requestparams) : '') . '>';
-  $qbxml_wrapper_footer = '</QBXMLMsgsRq></QBXML>';
-  $xmlstr = '';
-
-  foreach( $requestitems as $item ) {
-    // ignore empty requests
-    if( $str = $item['qbxml'] ) {
-      // set callback in database
-      $requestID = db_insert('qbxml_q')
-        ->fields(array(
-          'timestamp' => REQUEST_TIME,
-          'callback' => $item['callback'],
-        ))
-        ->execute();
-      $filename = qbxml_q_get_furi() . $requestID . QBXML_Q_RQ;
-      file_unmanaged_save_data( $str, $filename );
-
-      $xmlstr .= strtr( $item['qbxml'], array( '[@requestid]' => $requestID ) );
-    }
-  }
+function _qbxml_q_outgoing_QBXMLarray( $QBXMLMsgsRqs ) {
+ 
+  $xmlstr = qbxml_q_format_xml_elements( $QBXMLMsgsRqs );
 
   if( $xmlstr ) {
     $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
-    $qbxml = $qbxml_wrapper_header . $xmlstr . $qbxml_wrapper_footer;
-    watchdog( 'QBXML_Q', 'qbxml=(' . htmlspecialchars($qbxml) . ')' );
+    $qbxml = '<?xml version="1.0"?><?qbxml version="13.0"?><QBXML>' . $xmlstr . '</QBXML>';
     $item = $queue->createItem( $qbxml );
-    watchdog( 'QBXML_Q', '$item=(' . _var_dump2str( $item ) . ')' );
     return( TRUE );
   }
   return( FALSE );
@@ -175,7 +220,7 @@ function qbxml_q_cron_queue_info(){
 */
 function qbxml_q_deleterequest( $requestID ) {
   db_delete('qbxml_q')->condition('requestID', $requestID)->execute();
-  file_unmanaged_delete(qbxml_q_get_furi() . $requestID . QBXML_Q_RQ);
+  file_unmanaged_delete(_qbxml_q_get_furi() . $requestID . QBXML_Q_RQ);
 }
 
 
@@ -205,21 +250,23 @@ function qbxml_q_process_incoming( $response ) {
       $item->callback = json_decode($source->callback);
 
       // send to hook that does generic processing
-      if (sizeof(module_implements(QBXML_Q_HOOK_IN)) > 0) {
+      if (sizeof(module_implements(QBXML_Q_HOOK_PREPROCESS)) > 0) {
         // Call all modules that implement the hook, and let them make changes to $responsenode.
-        if (implode('', module_invoke_all(QBXML_Q_HOOK_IN, $responsenode))) {
+        if (implode('', module_invoke_all(QBXML_Q_HOOK_PREPROCESS, $responsenode))) {
           qbxml_q_deleterequest( $item->requestID );
            continue; // hook functions should only return something if they have claimed the data.
         }
       }
 
+      // send to predetermined, targetted processor hook
       if (is_object($item->callback)) {
-        if ($item->callback->callback) {
-          if ($ret = call_user_func($item->callback->callback, $item)) {
+        if ($item->callback->processincominghook) {
+          $userfunc = $item->callback->processincominghook . QBXML_Q_HOOK_PROCESSOR;
+          if ($ret = call_user_func($userfunc, $item)) {
             qbxml_q_deleterequest( $item->requestID );
             continue;
           }
-          watchdog('QPROC_IN', 'after call_user_func');
+          watchdog('QPROC_IN', $userfunc . ' failed to process incoming QBXML ' . $ret);
         }
 
       }
@@ -234,7 +281,7 @@ function qbxml_q_process_incoming( $response ) {
 //      rules_invoke_event(QBXML_Q_EVENT_IN, $requestID, $name, $responsenode, $callback_params);
 
       watchdog( 'QPROC_IN', "didn't die" );
-      $filename = qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
+      $filename = _qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
       file_unmanaged_save_data($item->node->asXML(), $filename);
       // this leaves copy of request, response, and database entry all intact. Something will need to clean up
     }
@@ -264,7 +311,7 @@ function qbxml_q_feeds_after_import(FeedsSource $source) {
 
 
 /*
- * Basic callback to process import requests using a Feeds importer
+ * Default incoming processor processes incoming QBXML response data using a Feeds importer
  */
 function qbxml_q_qbxml_q_process_incoming( $item ){
   if( !$item ) {
@@ -279,7 +326,7 @@ function qbxml_q_qbxml_q_process_incoming( $item ){
         // $fetcherconfig = $source->importer->fetcher->getConfig();
         $sourceconfig = $source->getConfig();
 
-        $filename = qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
+        $filename = _qbxml_q_get_furi() . $item->requestID . QBXML_Q_RS;
         $sourceconfig[ 'FeedsFileFetcher' ][ 'source' ] = $filename;
         file_unmanaged_save_data($item->node->asXML(), $filename);
         $source->importer->addConfig( array( 'process_in_background' => TRUE ) );
@@ -294,6 +341,64 @@ function qbxml_q_qbxml_q_process_incoming( $item ){
   // Didn't process
   return( FALSE );
 }
+
+/*
+ * Store a single request in database and return its newly found ID number
+ * Request is timestamped and serialized
+*/
+function _qbxml_q_stash_request( $request ) {
+  return(
+  db_insert('qbxml_q')
+    ->fields(
+      array(
+        'timestamp' => REQUEST_TIME,
+        'request' => $request,
+      ) )->execute()
+  );
+}
+
+/*
+ * Store a single request on disk with requestID in the filename
+*/
+function _qbxml_q_write_request_file( $xmlstr, $requestID ) {
+  $filename = _qbxml_q_get_furi() . $requestID . QBXML_Q_RQ;
+  file_unmanaged_save_data( $xmlstr, $filename );
+}
+
+/*
+ * Implement the action to take an array of QBXMLMsgsRq, and put them into the QBXML send Q
+ * attach callback information.
+ *   Input parameter $QBXMLMsgsRqs must be an array of XML renderable queries. Eg.
+ *   $QBXMLMsgsRqs = array(
+ *     array(
+ *       'key' => 'QBXMLMsgsRq',
+ *       'attributes' => array( 'onError' => 'continueOnError', ),
+ *       'value' => array(
+ *         'key' => 'CustomerQueryRq',
+ *         'value' => '<IncludeRetElement>FullName</IncludeRetElement>' ),
+ *         // attributes always have a requestID, but this is generated by qbxml_q and should not be passed in
+ *         // Some queries like AccountQueryRqType have additional attributes which will be preserved.
+ *       'encoded' => TRUE,
+ *     ),
+ *     array(
+ *
+ *  );
+ */
+function qbxml_q_action_add_render_array_to_out_queue( $QBXMLMsgsRqs ) {
+
+  foreach( $QBXMLMsgsRqs as &$QBXMLMsgsRq ) {
+    foreach( $QBXMLMsgsRq['value'] as &$request ) {
+      // put into database
+      $request['encoded'] = TRUE;
+      $request['#parentattributes'] = $QBXMLMsgsRq['attributes']; // store for possible use if error happens and regen needed
+      $xmlstr = qbxml_q_format_xml_elements( $request );
+      $request['attributes']['requestID'] = _qbxml_q_stash_request( $xmlstr ); // implication: request stashed without ID
+      _qbxml_q_write_request_file( $xmlstr, $request['attributes']['requestID'] );
+    }
+  }
+  _qbxml_q_outgoing_QBXMLarray($QBXMLMsgsRqs);
+}
+
 
 
 /**

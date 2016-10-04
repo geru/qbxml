@@ -11,14 +11,15 @@ require_once 'qbxml_q.inc';
 /**
  * Builds and returns the hrk_custom admin settings form.
  */
-function qbxml_q_admin_settings_form()
-{ $form[QBXML_Q_FURI] = array(
+function qbxml_q_admin_settings_form() { 
+  $form[QBXML_Q_FURI] = array(
       '#title' => t('QBXML_Q incoming and outgoing file directory (recommended to be private)'),
       '#type' => 'textfield',
       '#default_value' => variable_get(QBXML_Q_FURI),
       '#description' => t('Set the directory path for storing QBXML requests and responses.'),
       '#required' => TRUE,
-    );
+    ); 
+  
   return system_settings_form($form);
 }
 
@@ -35,6 +36,6 @@ function qbxml_q_admin_settings_form_submit($form, &$form_state)
     set_variable( QBXML_Q_FURI_OUT, "private://" );
   }
 }
- */
+*/
 
 

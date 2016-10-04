@@ -19,8 +19,6 @@ require_once 'qbxml_q.inc';
  */
 function qbxml_q_install()
 {
-  variable_set( QBXML_Q_FURI, 'private://qbxml_q' );
-  
   // module_invoke_all( QBXML_HOOK_IN, NULL );       // announce presence of hook to system
   $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
   $queue->createQueue();
@@ -44,8 +42,6 @@ function qbxml_q_uninstall()
       drupal_set_message( t('ERROR: qbxml_q uninstall: ' . $QID . ' not empty') );
     }
   }
-  // drupal_rmdir( qbxml_q_get_furi() );
-  variable_del( QBXML_Q_FURI );
 }
 
 
@@ -56,6 +52,10 @@ function qbxml_q_schema() {
   $schema['qbxml_q'] = array(
     'description' => 'qbxml_q database of incoming and outgoing queries and responses',
     'fields' => array(
+/*      'bookkey' => array(
+        ''
+      ),
+*/
       'requestID' => array(
         'description' => 'unique request ID for each outgoing and incoming message set',
         'type' => 'serial',
@@ -66,12 +66,12 @@ function qbxml_q_schema() {
         'type' => 'int',
         'not null' => FALSE,
       ),
-      'callback' => array(
-        'description' => 'json encoded callback information',
-        'type' => 'varchar',
-        'length' => '4096',
-        'not null' => TRUE,
-      ),
+      'request' => array(
+        'description' => 'QBXML request',
+        'type' => 'text',
+        'size' => 'big',
+        'serialize' => TRUE,
+      )
     ),
     'primary key' => array('requestID'),
   );
