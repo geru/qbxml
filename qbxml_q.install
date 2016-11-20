@@ -11,39 +11,6 @@
  * In this file, we're adding hook_install(), hook_uninstall() and hook_schema(). Notice
  * the variable_del()'s in hook_uninstall.
  */
-require_once 'qbxml_q.inc';
-
-
-/**
- * Implements hook_install().
- */
-function qbxml_q_install()
-{
-  // module_invoke_all( QBXML_HOOK_IN, NULL );       // announce presence of hook to system
-  $queue = DrupalQueue::get(QBXML_Q_OUT, TRUE);
-  $queue->createQueue();
-  $queue = DrupalQueue::get(QBXML_Q_IN, TRUE);
-  $queue->createQueue();
-}
-
-
-/**
- * Implements hook_uninstall().
- */
-function qbxml_q_uninstall()
-{ // Not sure whether to clear out the queues or not. There could be important stuff unprocessed in them
-  // todo: qbxml_q database gets deleted. also remove QBXML_FURI directory if empty
-  foreach( array( QBXML_Q_IN, QBXML_Q_OUT ) as $QID ) {}
-  { $queue = DrupalQueue::get($QID, TRUE);
-    if ($queue->numberOfItems() == 0) {
-      $queue->deleteQueue();
-    }
-    else {
-      drupal_set_message( t('ERROR: qbxml_q uninstall: ' . $QID . ' not empty') );
-    }
-  }
-}
-
 
 /**
  * Implements hook_schema().
@@ -52,19 +19,35 @@ function qbxml_q_schema() {
   $schema['qbxml_q'] = array(
     'description' => 'qbxml_q database of incoming and outgoing queries and responses',
     'fields' => array(
-/*      'bookkey' => array(
-        ''
-      ),
-*/
-      'requestID' => array(
+      'rid' => array(
         'description' => 'unique request ID for each outgoing and incoming message set',
         'type' => 'serial',
         'not null' => TRUE,
       ),
-      'timestamp' => array(
+      'gid' => array(
+        'description' => 'owner / first rid of group',
+        'type' => 'int',
+      ),
+      'bookname' => array(
+        'description' => 'unique book machine name',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+      ),
+      'created' => array(
         'description' => 'The Unix timestamp when this request was created.',
         'type' => 'int',
         'not null' => FALSE,
+      ),
+      'sent' => array(
+        'description' => 'The Unix timestamp when this request was created.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'type' => array(
+        'description' => 'Flag indicating request or response',
+        'type' => 'varchar', // 'q' is for request, 's' is for response
+        'length' => 1,
       ),
       'request' => array(
         'description' => 'QBXML request',
@@ -73,7 +56,8 @@ function qbxml_q_schema() {
         'serialize' => TRUE,
       )
     ),
-    'primary key' => array('requestID'),
+    'primary key' => array('rid'),
+    'indexes' => array( 'group_id' => array( 'gid' ), 'bookname' => array( 'bookname' ) ),
   );
   return( $schema );
 }

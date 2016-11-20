@@ -7,7 +7,6 @@ configure = admin/config/enterprise/qbxml_q_admin
 files[] = qbxml_q.module
 files[] = qbxml_q.admin.inc
 
-dependencies[] = qbwc_interface
 dependencies[] = rules
-dependencies[] = entity_view_mode
+; dependencies[] = entity_view_mode
 
