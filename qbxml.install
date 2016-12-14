@@ -3,7 +3,7 @@
 
 /**
  * @file
- * Install, update and uninstall functions for the qbxml_q module
+ * Install, update and uninstall functions for the qbxml module
  *
  * Download the schema module to auto-generate a schema array for a table:
  * http://drupal.org/project/schema.
@@ -15,9 +15,9 @@
 /**
  * Implements hook_schema().
  */
-function qbxml_q_schema() {
-  $schema['qbxml_q'] = array(
-    'description' => 'qbxml_q database of incoming and outgoing queries and responses',
+function qbxml_schema() {
+  $schema['qbxml'] = array(
+    'description' => 'qbxml database of incoming and outgoing queries and responses',
     'fields' => array(
       'rid' => array(
         'description' => 'unique request ID for each outgoing and incoming message set',
@@ -28,11 +28,10 @@ function qbxml_q_schema() {
         'description' => 'owner / first rid of group',
         'type' => 'int',
       ),
-      'bookname' => array(
-        'description' => 'unique book machine name',
-        'type' => 'varchar',
-        'length' => 64,
-        'not null' => TRUE,
+      'bookid' => array(
+        'description' => 'book machine id',
+        'type' => 'int',
+
       ),
       'created' => array(
         'description' => 'The Unix timestamp when this request was created.',
@@ -44,9 +43,9 @@ function qbxml_q_schema() {
         'type' => 'int',
         'not null' => FALSE,
       ),
-      'type' => array(
-        'description' => 'Flag indicating request or response',
-        'type' => 'varchar', // 'q' is for request, 's' is for response
+      'state' => array(
+        'description' => 'State of request',
+        'type' => 'varchar', // 'q'=queued, 's'=sent, 'e'=error, 'i'=iterating, 'u'=unprocessed but responded to
         'length' => 1,
       ),
       'request' => array(
@@ -57,7 +56,7 @@ function qbxml_q_schema() {
       )
     ),
     'primary key' => array('rid'),
-    'indexes' => array( 'group_id' => array( 'gid' ), 'bookname' => array( 'bookname' ) ),
+    'indexes' => array( 'group_id' => array( 'gid' ), 'bookid' => array( 'bookid' ) ),
   );
   return( $schema );
 }

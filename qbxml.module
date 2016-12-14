@@ -1,0 +1,475 @@
+<?php
+// $Id$
+// namespace Drupal\qbxml;
+// use Drupal\qbxml;
+
+require_once 'qbxml.inc';
+
+/**
+ * @file
+ * QB XML test module
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function qbxml_menu() {
+  $MENU_ENTERPRISE = 'admin/config/enterprise';
+
+  $items[$MENU_ENTERPRISE] = array(
+    'title' => 'Enterprise',
+    'description' => 'Enterprise configuration',
+    'weight' => -8,
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('access administration pages'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+    // 'position' => 'right',
+  );
+  /*
+  $items[$MENU_ENTERPRISE . '/qb'] = array(
+    'title' => 'Quickbooks',
+    'description' => 'Quickbooks interface and importing',
+    'weight' => -8,
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('access administration pages'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+    // 'position' => 'right',
+    // 'type' => MENU_NORMAL_ITEM,
+  );
+  $items[$MENU_ENTERPRISE . '/qbxml'] = array(
+    'title' => 'QBXML',
+    'description' => 'QBXML functionality',
+    'weight' => -8,
+    // Page callback, etc. need to be added here.
+    'page callback' => 'system_admin_menu_block_page',
+    // we should implement this function in system.admin.inc file
+    'access arguments' => array('access administration pages'),
+    'file' => 'system.admin.inc',
+    'file path' => drupal_get_path('module', 'system'),
+    // don't forget to add the file and path
+    // 'position' => 'right',
+    // 'type' => MENU_NORMAL_ITEM,
+  );
+  */
+  $items[$MENU_ENTERPRISE . '/qbxml_admin'] = array(
+    'title' => 'QBXML admin',
+    'description' => 'qbxml management configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('qbxml_admin_settings_form'),
+    'access arguments' => array('access administration pages'),
+    'file' => 'qbxml.admin.inc',
+    'file path' => drupal_get_path('module', 'qbxml'),
+    // 'type' ='position' => 'right',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items[$MENU_ENTERPRISE . '/qbxml_ops'] = array(
+    'title' => 'QBXML operations',
+    'description' => 'QBXML operations and import',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('qbxml_admin_operations_form'),
+    'access arguments' => array('administer administration pages'),
+    'file' => 'qbxml.admin.inc',
+    'file path' => drupal_get_path('module', 'qbxml'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_help().
+ */
+function qbxml_help($path, $arg) {
+  switch ($path) {
+    case 'admin/settings/qbxml':
+      return t('Configure the message queue directory for QBXML Queue module.');
+
+    case 'admin/help#qbxml':
+      $output = '<p>' . t('This is help text for the qbxml help page') . '</p>';
+      return $output;
+  }
+    return FALSE;
+}
+
+/**
+ * Implements hook_hook_info();
+ */
+function qbwml_hook_info() {
+  $hooks[ HOOK_QBXML_PREPROCESS ] = array( 'group' => 'qbxml' );
+  $hooks[ HOOK_QBXML_FILEPROCESS ] = array( 'group' => 'qbxml' );
+  $hooks[ HOOK_QBXML_IMPORTERS ] = array( 'group' => 'qbxml' );
+  return( $hooks );
+}
+
+/**
+ * Implements hook_qbxml_importers()
+ */
+function qbxml_qbxml_importers() {
+  return( array( 'qbxml_feeds_import' => 'QBXML Feeds importer' ) );
+}
+
+/*
+ * qbxml's uri to store files in
+ */
+function _qbxml_get_furi()
+{ $furi = variable_get( QBXML_FURI, 'private://qbxml' );
+  if( !file_prepare_directory($furi, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY) ) {
+    $furi = "private://";
+    variable_set( QBXML_FURI, $furi );
+  }
+  return( $furi . '/' );
+}
+
+/*
+ * Generate a filename to spec
+*/
+function _qbxml_filename( $bookid, $id, $type, $ext = 'xml' ) {
+  return( _qbxml_get_furi() . $bookid . '-' . $id . '_R' . $type . '.' . $ext );
+}
+
+/*
+ * Delete saved request file archive and database entry after successful response has been received
+*/
+function _qbxml_request_delete( $bookid, $requestID ) {
+  db_delete('qbxml')->condition('rid', $requestID)->condition('bookid', $bookid)->execute();
+}
+
+/*
+ * Store a single request in database and return its newly found ID number
+ * Request is timestamped and serialized
+*/
+function _qbxml_request_stash( $bookid, $groupID, $request, $state='q' ) {
+  return(
+  db_insert('qbxml')
+    ->fields( array(
+        'bookid' => $bookid,
+        'gid' => $groupID,
+        'state' => $state,
+        'created' => REQUEST_TIME,
+        'request' => json_encode($request),
+      ) )->execute()
+  );
+}
+
+/**
+ * Formats XML elements.
+ *
+ * @param $array
+ *   An array where each item represents an element and is either a:
+ *   - (key => value) pair (<key>value</key>)
+ *   - Associative array with fields:
+ *     - 'key': element name
+ *     - 'value': element contents
+ *     - 'attributes': associative array of element attributes
+ *     - 'encoded': TRUE if 'value' is already encoded
+ *
+ * In both cases, 'value' can be a simple string, or it can be another array
+ * with the same format as $array itself for nesting.
+ *
+ * If 'encoded' is TRUE it is up to the caller to ensure that 'value' is either
+ * entity-encoded or CDATA-escaped. Using this option is not recommended when
+ * working with untrusted user input, since failing to escape the data
+ * correctly has security implications.
+
+function _qbxml_format_xml_elements($array) {
+  $output = '';
+  foreach ($array as $key => $value) {
+    if (is_numeric($key)) {
+      if ($value['key']) {
+        $output .= '<' . $value['key'];
+        if (isset($value['attributes']) && is_array($value['attributes'])) {
+          $output .= drupal_attributes($value['attributes']);
+        }
+        if (isset($value['value']) && $value['value'] != '') {
+          $output .= '>' . (is_array($value['value']) ? _qbxml_format_xml_elements($value['value']) : (!empty($value['encoded']) ? $value['value'] : check_plain($value['value']))) . '</' . $value['key'] . ">\n";
+        }
+        else {
+          $output .= " />\n";
+        }
+      }
+      else {
+        $output .= is_array($value) ? _qbxml_format_xml_elements($value) : $value;
+      }
+    }
+    else {
+      $output .= '<' . $key;
+      if (isset($value['attributes']) && is_array($value['attributes'])) {
+        $output .= drupal_attributes($value['attributes']);
+      }
+      $output .= '>' . (is_array($value) ? _qbxml_format_xml_elements($value) : $value) . "</$key>\n";
+    }
+  }
+  return $output;
+}
+*/
+
+/**
+ * output an json-arrayified xml file
+ *
+function qbxml_jsonarray_as_XML($array, $name=NULL) {
+  if (!is_array($array)) {
+    return $name
+      ? "<$name>" . $array . "</$name>\n"
+      : $array;
+  }
+  $return = '';
+  if (!$name) {
+    foreach ($array as $key => $value) {
+      if ($key[0] != '@') {
+        if (!is_array($value) || qbxml_isAssoc($value)) {
+          $return .= "<$key" . _qbxml_jsonarray_attributes($value) . ">" . qbxml_jsonarray_as_XML(NULL, $value) . "</$key>\n";
+        }
+        else {
+          $return .= qbxml_jsonarray_as_XML($key, $value);
+        }
+      }
+    }
+  }
+  else {
+    foreach ($array as $value) {
+      $return .= "<$name" . _qbxml_jsonarray_attributes($value) . ">" . qbxml_jsonarray_as_XML(NULL, $value) . "</$name>\n";
+    }
+  }
+  return $return;
+}
+*/
+
+/*
+ * Generate an attribute string from an array or a scalar
+ */
+function _qbxml_gen_attributes( $attributes ) {
+  $ret = '';
+  if( is_array($attributes) ) {
+    foreach( $attributes as $key => $value) {
+      $ret .= ' ' . $key . '="' . (is_array($value) ? implode(',', $value) : $value) . '"';
+    }
+  }
+  else
+    $ret = $attributes;
+  return $ret;
+}
+
+/*
+ * tell if an array is associative
+*/
+function _qbxml_array_isassoc(array $arr)
+{
+  if (array() === $arr) return false;
+  return array_keys($arr) !== range(0, count($arr) - 1);
+}
+
+/**
+ */
+function _qbxml_array_to_xml(&$array, $parentkey=NULL, $attributes='' ) {
+  $output = ''; $raw = '';
+  $prefix = '';
+  $postfix = '';
+  if( isset($array['@attributes']) ) {
+    $attributes = _qbxml_gen_attributes($array['@attributes']);
+  }
+  if( isset($array['@raw']) ) {
+    $raw = $array['@raw'];
+  }
+  $prefix = $parentkey ? '<' . $parentkey . ($attributes ? $attributes : '') . '>' : '';
+  $postfix = $parentkey ? '</' . $parentkey . '>' : '';
+  if (is_scalar($array)) {
+    if( $array ) {
+      $output .= $prefix . $array . $postfix;
+    }
+  }
+  else {
+    $buildup = '';
+    foreach( $array as $key => $value ) {
+      if( !($key[0] == '@') ) { // ignore any keys starting with '@' they are metadata
+        if (is_integer($key)) {
+          if( $res = _qbxml_array_to_xml($value) ){
+            $output .= $prefix . $res . $postfix;
+          }          
+        }
+        else {
+          if( $res = _qbxml_array_to_xml($value, $key) ) {
+            $buildup .= $res;
+          }          
+        }
+      }
+    }
+    if( $buildup ) {
+      $output .= $prefix . $buildup . $postfix;
+    }
+  }
+  
+  return $output . $raw;
+}
+
+/*
+ * Store a single request on disk with requestID in the filename
+function _qbxml_write_xml_file( $bookid, $type, $reqarray ) {
+}
+*/
+
+/*
+ * Implement the action to take an array of QBXMLMsgsRq, and put them into the QBXML send Q
+ * attach callback information.
+ *   Input parameter $QBXMLMsgsRqs must be an array of XML renderable queries. Eg.
+ *   $QBXMLMsgsRqs = array(
+ *     array(
+ *       'key' => 'QBXMLMsgsRq',
+ *       'attributes' => array( 'onError' => 'continueOnError', ),
+ *       'value' => array(
+ *         'key' => 'CustomerQueryRq',
+ *         'value' => '<IncludeRetElement>FullName</IncludeRetElement>' ),
+ *         // attributes always have a requestID, but this is generated by qbxml and should not be passed in
+ *         // Some queries like AccountQueryRqType have additional attributes which will be preserved.
+ *       'encoded' => TRUE,
+ *     ),
+ *     array(
+ *
+ *  );
+function qbxml_action_add_render_array_to_out_queue( $bookid, $QBXMLMsgsRqs ) {
+  foreach( $QBXMLMsgsRqs as &$QBXMLMsgsRq ) { // possible, though unlikely, to have multiple QBXMLMSGSRq grouped in one request
+    foreach( $QBXMLMsgsRq['value'] as &$request ) {
+      // put into database
+      $request['encoded'] = TRUE;
+      $request['#attributes'] = array(
+        'parentattributes' => $QBXMLMsgsRq['attributes'],
+        'groupparent' => isset($QBXMLMsgsRq['value'][0]['requestID']) ? $QBXMLMsgsRq['value'][0]['requestID'] : 0,
+        'callback' => isset($QBXMLMsgsRq['value'][0]['#callback']) ? $QBXMLMsgsRq['value'][0]['#callback'] : array( 'importer' => 'qbxml', 'params' => '' ),
+      );
+      if( isset( $request['#callback'])) {
+        unset( $request['#callback']);
+      }
+        // $xmlstr = qbxml_format_xml_elements($request);
+      $request['attributes']['requestID'] = _qbxml_stash_request( $bookid, $request['#attributes']['groupparent'], 'q', $request );
+    }
+  }
+  // $QBXMLMsgsRqs['encoded'] = TRUE;
+  _qbxml_write_xml_file( $bookid, 'q', $QBXMLMsgsRqs );
+}
+ */
+
+/*
+ * return array of next level down
+ */
+function _qbxml_gen_xml_level( &$ret, array &$keys, $value ) {
+  $key = array_shift( $keys );
+  if( !count($keys) ) {
+    $ret[$key] = $value;
+    return;
+  }
+  if( !isset( $ret[$key] ) ) {
+    $ret[$key] = array();
+  }
+  _qbxml_gen_xml_level( $ret[$key], $keys, $value );
+}
+
+/*
+ * Process a qbxml form and produce well-formed QBXML
+ * generates XML based on:
+ * - name minus 'qbxml_' prefix
+ * - 'complete form' #qbxml_map mappings
+ */
+function qbxml_form_generate_qbxml_array( $form_state, $entity=NULL ) {
+  $ret = array();
+  foreach( $form_state['input'] as $key => $value ) {
+    if( isset($form_state['field'][$key]) ) {
+      if( $entity ) { // if this is a drupal field
+        $field = field_get_items(BC_ENTITY, $entity, $key);
+        $fieldvalue = field_view_value(BC_ENTITY, $entity, $key, $field[0]);
+        $value = drupal_render($fieldvalue);
+      }
+    }
+    else {
+      $value = drupal_render( $form_state['complete form'][$key] );
+    }
+    if( isset( $form_state['complete form'][$key]['#qbxml_map']) ) {
+      $QBXML_map_list = explode( '+', $form_state['complete form'][$key]['#qbxml_map'] );
+      if( $value ) {
+        foreach( $QBXML_map_list as $map_this ) {
+          $array_keys = explode('_', $map_this);
+          _qbxml_gen_xml_level($ret, $array_keys, $value);
+        }
+      }
+    }
+    if( substr( $key, 0, strlen(QBXML_FORM_NAMEMAP_PREFIX) ) == QBXML_FORM_NAMEMAP_PREFIX ) {
+      if( $value ) {
+        $array_keys = explode('_', substr($key, strlen(QBXML_FORM_NAMEMAP_PREFIX)));
+        _qbxml_gen_xml_level($ret, $array_keys, $value);
+      }
+    }
+  }
+  if( isset($form[QBXML_FORM_RAWQUERY]) && $form[QBXML_FORM_RAWQUERY] ){
+    $ret['@raw'] = $form[QBXML_FORM_RAWQUERY];
+  }
+  return $ret;
+}
+
+/*
+ * get @request metadata array from form
+ */
+function qbxml_form_generate_request_metadata( &$form_state ) {
+  $requestinfo = array();
+  // generate callback information from form
+  foreach( preg_grep( '/^' . QBXML_FORM_REQUEST_PREFIX . '/', array_keys($form_state['input']) ) as $callbackinfo ) {
+    $info = explode( '_', substr($callbackinfo, strlen(QBXML_FORM_REQUEST_PREFIX)) );
+    _qbxml_gen_xml_level( $requestinfo, $info, $form_state['input'][$callbackinfo] );
+  }
+  return $requestinfo;
+}
+
+/*
+ * Generate QB XML request from form
+ * Returns a renderable QBXMLMsgsRq array
+ */
+function qbxml_form_generate_request( &$form_state, $requestcmd ) {
+  return array(
+    $requestcmd => array(
+        '@request' => qbxml_form_generate_request_metadata($form_state),
+        '@key' => $requestcmd
+      ) + qbxml_form_generate_qbxml_array($form_state)
+  );
+}
+
+/*
+ * Generate QBXMLMsgsRq from set of requests
+ */
+function qbxml_generate_qbxmlmsgsrq( array &$requests, $attributes= array('onError' => 'continueOnError') ) {
+  return array( 
+    '@attributes' => $attributes,
+    '@key' => QBXMLMsgsRq,
+  ) + $requests;
+}
+
+/*
+ * Implement the action to take a QBXMLMsgsRq, and put them into the QBXML send Q
+ * attach callback information.
+ */
+function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
+  $groupID = 0;
+  foreach ($qbxmlmsgsrq as $requestkey => &$request) { // possible, to have multiple QBXMLMSGSRq grouped in one request
+    if (!($requestkey[0] == '@')) {
+      // put into database
+      $request['@request'] = array(
+        'groupID' => $groupID,
+        'callback' => isset($requestset['@request']['callback']) ? $requestset['@request']['callback'] : array(
+          'importer' => QBXML_DEFAULT_IMPORTER,
+          'feedsprefix' => QBXML_FEEDS_PREFIX
+        ),
+        'parent' => array(
+          'key' => $qbxmlmsgsrq['@key'],
+          'attributes' => isset($qbxmlmsgsrq['@attributes']) ? $qbxmlmsgsrq['@attributes'] : array(),
+        ),
+        'key' => $requestkey,
+      );
+      $requestID = _qbxml_request_stash($bookid, $request['@request']['groupID'], $request);
+      $request['@attributes']['requestID'] = $requestID;
+      if (!$groupID ) {
+          $groupID = $requestID;
+      }
+    }
+  }
+  $qbxmlmsgsrq = array(QBXMLMsgsRq => $qbxmlmsgsrq);
+  $xmlstr = _qbxml_array_to_xml( $qbxmlmsgsrq, 'QBXML');
+  file_unmanaged_save_data( $xmlstr, _qbxml_filename( $bookid, $groupID, 'q' ) );
+}
+
