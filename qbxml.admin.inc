@@ -64,7 +64,7 @@ function qbxml_admin_operations_form() {
     "VendorType",
   );
 
-  $form['list'] = array(
+  $form[QBXML_FORM_REQUEST_BASE] = array(
     '#title' => t('Quickbooks list'),
     '#type' => 'select',
     '#options' => $qb_list,
@@ -75,7 +75,7 @@ function qbxml_admin_operations_form() {
     '#attributes' => array('class' => array('views-exposed-widget', 'left')),
   );
 
-  $form['opcode'] = array(
+  $form[QBXML_FORM_REQUEST_OPCODE] = array(
     '#title' => t('Operation'),
     '#type' => 'select',
     '#options' => array('Query', 'Mod', 'Add'),
@@ -105,33 +105,50 @@ function qbxml_admin_operations_form() {
     '#element_validate' => array('element_validate_integer_positive'),
   );
 
-  $form[QBXML_FORM_NAMEMAP_PREFIX . 'ActiveStatus'] = array( // Name after 'qbxml_' is QBXML tag
+  $form['activestatus'] = array(
     '#title' => t('Active status'),
     '#type' => 'radios',
     '#options' => array( 0 => 'Not set', 'ActiveOnly' => 'Active', 'InactiveOnly' => 'Inactive', 'All' => 'All' ),
     '#default_value' => 'All',
     '#description' => t('Active status of desired data.'),
-    // '#element_validate' => array('element_validate_integer_positive'),
   );
 
-  $form[QBXML_FORM_NAMEMAP_PREFIX . 'MaxReturned'] = array( // Name after 'qbxml_' is QBXML tag
+  $form['maxreturned'] = array(
     '#title' => t('Chunk size'),
     '#type' => 'textfield',
-    // '#default_value' => NULL,
     '#description' => t('How many return elements at a time.'),
     '#element_validate' => array('element_validate_integer_positive'),
+  );
+
+  $form['timedatefrom'] = array(
+    '#title' => t('Date from'),
+    '#type' => 'textfield',
+    '#description' => t('Date from (YYYY-MM-DD[ hh:mm:ss]'),
+    // QBXML_THEME => 'qbxml_theme',
+  );
+
+  $form['timedateto'] = array(
+    '#title' => t('Date to'),
+    '#type' => 'textfield',
+    '#description' => t('Date to (YYYY-MM-DD[ hh:mm:ss]'),
+    // QBXML_THEME => 'qbxml_theme',
   );
 
   $form[QBXML_FORM_RAWQUERY] = array(
     '#title' => t('raw QBXML query'),
     '#type' => 'textarea',
-    // Type properly formatted QBXML here.
     '#description' => t('Type properly formatted QBXML for the operation. NOT RECOMMENDED'),
-    '#required' => FALSE,
   );
-
+  
   // set $form['#theme']
   return $form;
+}
+
+/*
+ * Callback to generate QBXML mapping (form_id_mapQBXML)
+ */
+function qbxml_admin_operations_form_mapQBXML() {
+  return array();
 }
 
 /**
@@ -143,21 +160,35 @@ function qbxml_admin_operations_form_submit($form_id, &$form_state) {
   $requests = array();
   // create array to be rendered by format_xml_elements
   // multiple QBXMLMmsgsRq elements are allowed. We are assuming just a single one, but the Rule expects one or more in an array
-  foreach( $form_state['input']['list'] as $listindex ) {
-    $xmlcmd = $form_state['complete form']['list']['#options'][$listindex] . $form_state['complete form']['opcode']['#options'][$form_state['input']['opcode']] . 'Rq';
-    $requests += qbxml_form_generate_request( $form_state, $xmlcmd );
-    
-    if( !isset($requests[$xmlcmd]['@request']['callback']['importer']) ) {
-      $requests[$xmlcmd]['@request']['callback']['importer'] = QBXML_DEFAULT_IMPORTER;
-    }
-    if( isset($form_state['input'][QBXML_FORM_NAMEMAP_PREFIX . 'MaxReturned']) && $form_state['input'][QBXML_FORM_NAMEMAP_PREFIX . 'MaxReturned'] ) {
-      // todo: this is a problem if MaxReturned gets mapped via #qbxml_map
-      $requests[$xmlcmd]['@attributes'] = array('iterator' => 'Start');
-    }
+  foreach( $form_state['input'][QBXML_FORM_REQUEST_BASE] as $listindex ) {
+
+    $qbcmd_base = $form_state['complete form'][QBXML_FORM_REQUEST_BASE]['#options'][$listindex];
+    $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['input'][QBXML_FORM_REQUEST_OPCODE]];
+    $requests += qbxml_form_generate_request( $form_state, $qbcmd_base, $qbcmd_opcode );
   }
   // rules_invoke_component( 'qbxml_q_action_add_render_array_to_out_queue', $QBXMLMsgsRqs );
   qbxml_action_add_xml_array_to_out_queue( $form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests) );
 }
+
+/**
+ * Submit function for input_simple_form().
+function qbxml_admin_operations_form_submit($form_id, &$form_state) {
+  drupal_set_message(t('The operation has been submitted - you are here.'));
+
+  $requests = array();
+  // create array to be rendered by format_xml_elements
+  // multiple QBXMLMmsgsRq elements are allowed. We are assuming just a single one, but the Rule expects one or more in an array
+  foreach( $form_state['input']['list'] as $listindex ) { 
+    // stepping well outside of the box with qbxml theme-based functions returning qbxml associative array instead of HTML string
+    $qbxmlcommand = ucfirst($qbxmlbase) . ucfirst($qbxmlreq) . 'Rq';
+    $requests[]
+    $requests[ += theme( 'qbxml__' .  . '__' . , 
+      $form_state['complete form'] );
+  }
+  // rules_invoke_component( 'qbxml_q_action_add_render_array_to_out_queue', $QBXMLMsgsRqs );
+  qbxml_action_add_xml_array_to_out_queue( $form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests) );
+}
+ **/
 
 
 

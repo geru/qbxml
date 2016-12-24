@@ -24,35 +24,7 @@ function qbxml_menu() {
     'access arguments' => array('access administration pages'),
     'file' => 'system.admin.inc',
     'file path' => drupal_get_path('module', 'system'),
-    // 'position' => 'right',
   );
-  /*
-  $items[$MENU_ENTERPRISE . '/qb'] = array(
-    'title' => 'Quickbooks',
-    'description' => 'Quickbooks interface and importing',
-    'weight' => -8,
-    'page callback' => 'system_admin_menu_block_page',
-    'access arguments' => array('access administration pages'),
-    'file' => 'system.admin.inc',
-    'file path' => drupal_get_path('module', 'system'),
-    // 'position' => 'right',
-    // 'type' => MENU_NORMAL_ITEM,
-  );
-  $items[$MENU_ENTERPRISE . '/qbxml'] = array(
-    'title' => 'QBXML',
-    'description' => 'QBXML functionality',
-    'weight' => -8,
-    // Page callback, etc. need to be added here.
-    'page callback' => 'system_admin_menu_block_page',
-    // we should implement this function in system.admin.inc file
-    'access arguments' => array('access administration pages'),
-    'file' => 'system.admin.inc',
-    'file path' => drupal_get_path('module', 'system'),
-    // don't forget to add the file and path
-    // 'position' => 'right',
-    // 'type' => MENU_NORMAL_ITEM,
-  );
-  */
   $items[$MENU_ENTERPRISE . '/qbxml_admin'] = array(
     'title' => 'QBXML admin',
     'description' => 'qbxml management configuration',
@@ -79,8 +51,10 @@ function qbxml_menu() {
 
 /**
  * Implements hook_help().
+ * @param $path
+ * @return bool|null|string
  */
-function qbxml_help($path, $arg) {
+function qbxml_help($path) {
   switch ($path) {
     case 'admin/settings/qbxml':
       return t('Configure the message queue directory for QBXML Queue module.');
@@ -95,11 +69,71 @@ function qbxml_help($path, $arg) {
 /**
  * Implements hook_hook_info();
  */
-function qbwml_hook_info() {
+function qbxml_hook_info() {
   $hooks[ HOOK_QBXML_PREPROCESS ] = array( 'group' => 'qbxml' );
   $hooks[ HOOK_QBXML_FILEPROCESS ] = array( 'group' => 'qbxml' );
   $hooks[ HOOK_QBXML_IMPORTERS ] = array( 'group' => 'qbxml' );
   return( $hooks );
+}
+
+/**
+ * Implements hook_theme()
+ * @param $existing
+ * @param $type
+ * @param $theme
+ * @param $path
+ * @return array
+ */
+function qbxml_theme($existing, $type, $theme, $path) {
+  $ret = array(
+    'qbxml' => array(
+      // 'variables' => array( 'input' => array(), 'qbxml_base' => NULL, 'qbxml_opcode' => NULL,   ),
+      'includes' => array( "$path/template.php" ),
+      'preprocess functions' => array( 'qbxml_preprocess' ),
+      'function' => 'theme_qbxml'
+    )
+  );
+  foreach( array( 'price_nocurrency', 'bool_truefalse', 'field_value' ) as $field ) {
+    $ret['qbxml_' . $field] = array(
+      'template' => $field,
+      'path' => $path . '/theme'
+    );
+  }
+  $qbxmlext = '\.qbxml\.tpl\.php$';
+  $qbxmlfilescanpattern = "/(.+)\/(\w+)$qbxmlext/";
+  foreach( array($path . '/theme', 'sites/all') as $searchdir ) {
+    $outfiles = file_scan_directory($searchdir, "/$qbxmlext/");
+    foreach ($outfiles as $absolute => $filename) {
+      $matches = array();
+      if (preg_match($qbxmlfilescanpattern, $filename->uri, $matches)) {
+        $ret['qbxml__' . $matches[2]] = array(
+          'template' => $matches[2] . '.qbxml', // strip extensions
+          'path' => $matches[1],
+          'base hook' => 'qbxml'
+        );
+      }
+    }
+  }
+
+  return $ret;
+}
+
+/*
+ * Implement the main qbxml theme
+ * Probably mainly used for the Query opcode
+ */
+function theme_qbxml( $var ) {
+  $base = $var['qbxml_base'] ?? '';
+  $output = '';
+  if( isset($var['input']['activestatus']) ) {
+    $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
+  }
+  if( !empty($var['input']['maxreturned']) ) {
+    if( $base != 'Account' ) {
+      $output .= '<MaxReturned>' . $var['input']['maxreturned'] . '</MaxReturned>';
+    }
+  }
+  return( $output );
 }
 
 /**
@@ -108,6 +142,88 @@ function qbwml_hook_info() {
 function qbxml_qbxml_importers() {
   return( array( 'qbxml_feeds_import' => 'QBXML Feeds importer' ) );
 }
+
+// Functionality provided by qbxml module ---
+
+/*
+ * qbxml mapping function for qbxml operations form
+
+function qbxml_form_mapQBXML( &$form_state, $mapterms=array(), $mappingfunc=NULL ) {
+  $weight = 0;
+  $mapping = array(
+    'opcode' => array(
+      'Query' => array(
+        'activestatus' => 'ActiveStatus',
+        'datetimefrom' => array( 'key' => 'FromModifiedDate', 'theme' => 'qbxml_datetime' ),
+        'datetimeto' => array( 'key' => 'ToModifiedDate', 'theme' => 'qbxml_datetime' ),
+        'maxreturned' => 'MaxReturned',
+      ),
+      'Add' => array(
+        'isactive' => array( 'key' => 'IsActive', 'theme' => 'qbxml_truefalse' ),
+        'name' => 'Name',
+        'extid' => 'ListID',
+        'description' => 'Desc',
+        'editsequence' => 'EditSequence',
+      ),
+      'Mod' => array(
+        'isactive' => array( 'key' => 'IsActive', 'theme' => 'qbxml_truefalse' ),
+        'name' => 'Name',
+        'extid' => 'ListID',
+        'description' => 'Desc',
+        'editsequence' => 'EditSequence',
+      ),
+    ),
+    'base' => array(
+      'Account' => array(
+        'maxreturned' => NULL,
+        'bc_class' => 'AccountType',
+      ),
+    ),
+    'query' => array(
+      'AccountAdd' => array(
+        'name' =>               array( 'key' => 'AccountAdd_Name',     'force' => 'string', 'weight' => ++$weight ),
+        'isactive' =>           array( 'key' => 'AccountAdd_IsActive', 'theme' => 'qbxml_truefalse', 'weight' => ++$weight ),
+        'extid' =>              array( 'key' => 'AccountAdd_ParentRef_ListID', 'weight' => ++$weight ),
+        'bc_class' =>           array( 'key' => 'AccountAdd_AccountType', 'weight' => ++$weight ),
+        'data_accountnumber' => array( 'key' => 'AccountAdd_AccountNumber', 'weight' => ++$weight ),
+        'data_banknumber' =>    array( 'key' => 'AccountAdd_BankNumber', 'weight' => ++$weight ),
+        'description' =>        array( 'key' => 'AccountAdd_Desc', 'weight' => ++$weight ),
+        'bc_value' =>           array( 'key' => 'AccountAdd_OpenBalance', 'theme' => 'qbxml_price_nocurrency', 'weight' => ++$weight),
+        'data_taxlineid' =>     array( 'key' => 'AccountAdd_TaxLineID', 'weight' => ++$weight ),
+      ),
+    ),
+  );
+  if( !$mappingfunc ) {
+    $mappingfunc = $form_state['complete form']['#form_id'] . '_mapQBXML';
+  }
+  if( function_exists($mappingfunc) ) {
+    $mapping = array_merge( $mapping, $mappingfunc() );
+  }
+
+  // clear all mappings
+  foreach( array_keys($form_state['input']) as $key ) {
+    if( isset($form_state['complete form'][$key][QBXML_MAP]) ) {
+      unset( $form_state['complete form'][$key][QBXML_MAP] );
+    }
+  }
+  foreach( $mapterms as $termtype => $term ) {
+    foreach( $form_state['input'] as $key => $value ) {
+      if( isset($mapping[$termtype][$term]) ) {
+        if (array_key_exists($key, $mapping[$termtype][$term])) {
+          if ($value && !empty($mapping[$termtype][$term][$key]['force'])) {
+            if (is_null($mapping[$termtype][$term][$key])) {
+              unset($form_state['complete form'][$key][QBXML_MAP]);
+            }
+            else {
+              $form_state['complete form'][$key][QBXML_MAP] = $mapping[$termtype][$term][$key];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+*/
 
 /*
  * qbxml's uri to store files in
@@ -152,89 +268,6 @@ function _qbxml_request_stash( $bookid, $groupID, $request, $state='q' ) {
   );
 }
 
-/**
- * Formats XML elements.
- *
- * @param $array
- *   An array where each item represents an element and is either a:
- *   - (key => value) pair (<key>value</key>)
- *   - Associative array with fields:
- *     - 'key': element name
- *     - 'value': element contents
- *     - 'attributes': associative array of element attributes
- *     - 'encoded': TRUE if 'value' is already encoded
- *
- * In both cases, 'value' can be a simple string, or it can be another array
- * with the same format as $array itself for nesting.
- *
- * If 'encoded' is TRUE it is up to the caller to ensure that 'value' is either
- * entity-encoded or CDATA-escaped. Using this option is not recommended when
- * working with untrusted user input, since failing to escape the data
- * correctly has security implications.
-
-function _qbxml_format_xml_elements($array) {
-  $output = '';
-  foreach ($array as $key => $value) {
-    if (is_numeric($key)) {
-      if ($value['key']) {
-        $output .= '<' . $value['key'];
-        if (isset($value['attributes']) && is_array($value['attributes'])) {
-          $output .= drupal_attributes($value['attributes']);
-        }
-        if (isset($value['value']) && $value['value'] != '') {
-          $output .= '>' . (is_array($value['value']) ? _qbxml_format_xml_elements($value['value']) : (!empty($value['encoded']) ? $value['value'] : check_plain($value['value']))) . '</' . $value['key'] . ">\n";
-        }
-        else {
-          $output .= " />\n";
-        }
-      }
-      else {
-        $output .= is_array($value) ? _qbxml_format_xml_elements($value) : $value;
-      }
-    }
-    else {
-      $output .= '<' . $key;
-      if (isset($value['attributes']) && is_array($value['attributes'])) {
-        $output .= drupal_attributes($value['attributes']);
-      }
-      $output .= '>' . (is_array($value) ? _qbxml_format_xml_elements($value) : $value) . "</$key>\n";
-    }
-  }
-  return $output;
-}
-*/
-
-/**
- * output an json-arrayified xml file
- *
-function qbxml_jsonarray_as_XML($array, $name=NULL) {
-  if (!is_array($array)) {
-    return $name
-      ? "<$name>" . $array . "</$name>\n"
-      : $array;
-  }
-  $return = '';
-  if (!$name) {
-    foreach ($array as $key => $value) {
-      if ($key[0] != '@') {
-        if (!is_array($value) || qbxml_isAssoc($value)) {
-          $return .= "<$key" . _qbxml_jsonarray_attributes($value) . ">" . qbxml_jsonarray_as_XML(NULL, $value) . "</$key>\n";
-        }
-        else {
-          $return .= qbxml_jsonarray_as_XML($key, $value);
-        }
-      }
-    }
-  }
-  else {
-    foreach ($array as $value) {
-      $return .= "<$name" . _qbxml_jsonarray_attributes($value) . ">" . qbxml_jsonarray_as_XML(NULL, $value) . "</$name>\n";
-    }
-  }
-  return $return;
-}
-*/
-
 /*
  * Generate an attribute string from an array or a scalar
  */
@@ -252,19 +285,20 @@ function _qbxml_gen_attributes( $attributes ) {
 
 /*
  * tell if an array is associative
-*/
-function _qbxml_array_isassoc(array $arr)
-{
+
+function _qbxml_array_isassoc(array $arr) {
   if (array() === $arr) return false;
   return array_keys($arr) !== range(0, count($arr) - 1);
 }
-
+*/
 /**
+ * @param $array
+ * @param null $parentkey
+ * @param string $attributes
+ * @return string
  */
 function _qbxml_array_to_xml(&$array, $parentkey=NULL, $attributes='' ) {
   $output = ''; $raw = '';
-  $prefix = '';
-  $postfix = '';
   if( isset($array['@attributes']) ) {
     $attributes = _qbxml_gen_attributes($array['@attributes']);
   }
@@ -280,78 +314,34 @@ function _qbxml_array_to_xml(&$array, $parentkey=NULL, $attributes='' ) {
   }
   else {
     $buildup = '';
-    foreach( $array as $key => $value ) {
-      if( !($key[0] == '@') ) { // ignore any keys starting with '@' they are metadata
-        if (is_integer($key)) {
-          if( $res = _qbxml_array_to_xml($value) ){
-            $output .= $prefix . $res . $postfix;
-          }          
-        }
-        else {
-          if( $res = _qbxml_array_to_xml($value, $key) ) {
-            $buildup .= $res;
-          }          
+    if( $array ) {
+      foreach ($array as $key => $value) {
+        if (!($key[0] == '@')) { // ignore any keys starting with '@' they are metadata
+          if (is_integer($key)) {
+            if ($res = _qbxml_array_to_xml($value)) {
+              $output .= $prefix . $res . $postfix;
+            }
+          }
+          else {
+            if ($res = _qbxml_array_to_xml($value, $key)) {
+              $buildup .= $res;
+            }
+          }
         }
       }
-    }
-    if( $buildup ) {
-      $output .= $prefix . $buildup . $postfix;
+    } // will produce empty container if array is null
+    if( $buildup || $raw ) {
+      $output .= $prefix . $buildup . $raw . $postfix;
     }
   }
   
-  return $output . $raw;
+  return $output;
 }
 
 /*
- * Store a single request on disk with requestID in the filename
-function _qbxml_write_xml_file( $bookid, $type, $reqarray ) {
-}
-*/
+ * generate arbitrarily deep nested array element
 
-/*
- * Implement the action to take an array of QBXMLMsgsRq, and put them into the QBXML send Q
- * attach callback information.
- *   Input parameter $QBXMLMsgsRqs must be an array of XML renderable queries. Eg.
- *   $QBXMLMsgsRqs = array(
- *     array(
- *       'key' => 'QBXMLMsgsRq',
- *       'attributes' => array( 'onError' => 'continueOnError', ),
- *       'value' => array(
- *         'key' => 'CustomerQueryRq',
- *         'value' => '<IncludeRetElement>FullName</IncludeRetElement>' ),
- *         // attributes always have a requestID, but this is generated by qbxml and should not be passed in
- *         // Some queries like AccountQueryRqType have additional attributes which will be preserved.
- *       'encoded' => TRUE,
- *     ),
- *     array(
- *
- *  );
-function qbxml_action_add_render_array_to_out_queue( $bookid, $QBXMLMsgsRqs ) {
-  foreach( $QBXMLMsgsRqs as &$QBXMLMsgsRq ) { // possible, though unlikely, to have multiple QBXMLMSGSRq grouped in one request
-    foreach( $QBXMLMsgsRq['value'] as &$request ) {
-      // put into database
-      $request['encoded'] = TRUE;
-      $request['#attributes'] = array(
-        'parentattributes' => $QBXMLMsgsRq['attributes'],
-        'groupparent' => isset($QBXMLMsgsRq['value'][0]['requestID']) ? $QBXMLMsgsRq['value'][0]['requestID'] : 0,
-        'callback' => isset($QBXMLMsgsRq['value'][0]['#callback']) ? $QBXMLMsgsRq['value'][0]['#callback'] : array( 'importer' => 'qbxml', 'params' => '' ),
-      );
-      if( isset( $request['#callback'])) {
-        unset( $request['#callback']);
-      }
-        // $xmlstr = qbxml_format_xml_elements($request);
-      $request['attributes']['requestID'] = _qbxml_stash_request( $bookid, $request['#attributes']['groupparent'], 'q', $request );
-    }
-  }
-  // $QBXMLMsgsRqs['encoded'] = TRUE;
-  _qbxml_write_xml_file( $bookid, 'q', $QBXMLMsgsRqs );
-}
- */
-
-/*
- * return array of next level down
- */
-function _qbxml_gen_xml_level( &$ret, array &$keys, $value ) {
+function _qbxml_set_deep_array_element( &$ret, array &$keys, $value ) {
   $key = array_shift( $keys );
   if( !count($keys) ) {
     $ret[$key] = $value;
@@ -360,59 +350,101 @@ function _qbxml_gen_xml_level( &$ret, array &$keys, $value ) {
   if( !isset( $ret[$key] ) ) {
     $ret[$key] = array();
   }
-  _qbxml_gen_xml_level( $ret[$key], $keys, $value );
+  _qbxml_set_deep_array_element( $ret[$key], $keys, $value );
 }
-
+*/
 /*
- * Process a qbxml form and produce well-formed QBXML
+ * Theme something based on qbxml theme rather than its set theme
+
+function qbxml_theme_element( $element, $theme=NULL ) {
+  if( !$theme ) {
+    $theme = isset($element[QBXML_MAP]['theme'])
+      ? $element[QBXML_MAP]['theme']
+      : NULL;
+  } // change #theme and restore after
+
+  if( is_array( $element ) ) {
+    $value = array( 'value' => $element['und'] ?? '' );
+  } else {
+    $value = array('value' => $element);
+  }
+
+  return $theme
+    ? theme( $theme, $value )
+    : $value['value'];
+}
+*/
+/*
+ * Process a form with QBXML mapping overlay and produce well-formed QBXML array
  * generates XML based on:
  * - name minus 'qbxml_' prefix
  * - 'complete form' #qbxml_map mappings
- */
-function qbxml_form_generate_qbxml_array( $form_state, $entity=NULL ) {
+ * - 'complete form' #qbxml_theme theming information
+
+function qbxml_form_generate_qbxml_array( $form_state, &$maxreturned=NULL ) {
   $ret = array();
   foreach( $form_state['input'] as $key => $value ) {
-    if( isset($form_state['field'][$key]) ) {
-      if( $entity ) { // if this is a drupal field
-        $field = field_get_items(BC_ENTITY, $entity, $key);
-        $fieldvalue = field_view_value(BC_ENTITY, $entity, $key, $field[0]);
-        $value = drupal_render($fieldvalue);
-      }
-    }
-    else {
-      $value = drupal_render( $form_state['complete form'][$key] );
-    }
-    if( isset( $form_state['complete form'][$key]['#qbxml_map']) ) {
-      $QBXML_map_list = explode( '+', $form_state['complete form'][$key]['#qbxml_map'] );
-      if( $value ) {
-        foreach( $QBXML_map_list as $map_this ) {
+    if ($value) {
+      if (isset($form_state['complete form'][$key][QBXML_MAP])) { // (set the bunch, then sort by weight, then output all)
+        // get themed value
+        $value = qbxml_theme_element( $form_state['input'][$key], $form_state['complete form'][$key][QBXML_MAP]['theme'] ?? NULL );
+        $mapping = is_array($form_state['complete form'][$key][QBXML_MAP])
+          ? $form_state['complete form'][$key][QBXML_MAP]['key']
+          : $form_state['complete form'][$key][QBXML_MAP];
+        $QBXML_map_list = explode('+', $mapping);
+        foreach ($QBXML_map_list as $map_this) {
+          if( !is_null($maxreturned)) {
+            if (stristr($map_this, 'maxreturned') && ($value) && !$maxreturned) {
+              $maxreturned = $value;
+            }
+          }
           $array_keys = explode('_', $map_this);
-          _qbxml_gen_xml_level($ret, $array_keys, $value);
+          _qbxml_set_deep_array_element($ret, $array_keys, $value);
         }
       }
     }
-    if( substr( $key, 0, strlen(QBXML_FORM_NAMEMAP_PREFIX) ) == QBXML_FORM_NAMEMAP_PREFIX ) {
-      if( $value ) {
-        $array_keys = explode('_', substr($key, strlen(QBXML_FORM_NAMEMAP_PREFIX)));
-        _qbxml_gen_xml_level($ret, $array_keys, $value);
-      }
-    }
   }
-  if( isset($form[QBXML_FORM_RAWQUERY]) && $form[QBXML_FORM_RAWQUERY] ){
-    $ret['@raw'] = $form[QBXML_FORM_RAWQUERY];
+  if( !empty($form_state['input'][QBXML_FORM_RAWQUERY]) ){
+    $ret['@raw'] = $form_state['input'][QBXML_FORM_RAWQUERY];
   }
+  return $ret;
+}
+*/
+
+/*
+ * Process a form with QBXML mapping overlay and produce well-formed QBXML arraty
+ * generates XML based on:
+ * - name minus 'qbxml_' prefix
+ * - 'complete form' #qbxml_map mappings
+ * - 'complete form' #qbxml_theme theming information
+ */
+function qbxml_form_generate_qbxml( &$variables, $base, $opcode ) {
+  $vars = array(
+    'qbxml_base' => $base,
+    'qbxml_opcode' => $opcode,
+    'input' => $variables
+  );
+  $ret = array( '@raw' => theme( 'qbxml', $vars ) );
+  if( stristr($ret['@raw'], 'MaxReturned') ) {
+    $ret['@attributes'] = array('iterator' => 'Start');
+  }
+
   return $ret;
 }
 
 /*
  * get @request metadata array from form
+ * form keys with names beginning with QBXML_FORM_REQUEST_PREFIX will get turned into
+ *   request metadata array according to name
+ * all form keys will be searched for anything named with maxreturned and if they have a value then
+ *   the request will get an iterator="Start" attribute
  */
-function qbxml_form_generate_request_metadata( &$form_state ) {
+function qbxml_form_generate_request_metadata( &$variables ) {
   $requestinfo = array();
   // generate callback information from form
-  foreach( preg_grep( '/^' . QBXML_FORM_REQUEST_PREFIX . '/', array_keys($form_state['input']) ) as $callbackinfo ) {
+  foreach( preg_grep( '/^' . QBXML_FORM_REQUEST_PREFIX . '/', array_keys($variables) ) as $callbackinfo ) {
     $info = explode( '_', substr($callbackinfo, strlen(QBXML_FORM_REQUEST_PREFIX)) );
-    _qbxml_gen_xml_level( $requestinfo, $info, $form_state['input'][$callbackinfo] );
+    _qbxml_set_deep_array_element( $requestinfo, $info, $variables[$callbackinfo] );
   }
   return $requestinfo;
 }
@@ -421,13 +453,16 @@ function qbxml_form_generate_request_metadata( &$form_state ) {
  * Generate QB XML request from form
  * Returns a renderable QBXMLMsgsRq array
  */
-function qbxml_form_generate_request( &$form_state, $requestcmd ) {
-  return array(
+function qbxml_form_generate_request( &$variables, $base, $opcode ) {
+  $requestcmd = $base . $opcode . 'Rq';
+  $ret = array(
     $requestcmd => array(
-        '@request' => qbxml_form_generate_request_metadata($form_state),
-        '@key' => $requestcmd
-      ) + qbxml_form_generate_qbxml_array($form_state)
+      '@request' => qbxml_form_generate_request_metadata($variables),
+      '@key' => $requestcmd,
+    )
   );
+  $ret[$requestcmd] += qbxml_form_generate_qbxml($variables, $base, $opcode);
+  return( $ret );
 }
 
 /*

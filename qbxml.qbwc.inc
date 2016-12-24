@@ -83,27 +83,34 @@ function qbxml_feeds_import( $request, $item ){
   $requestID = isset($request['@response']['RequestID']) ? $request['@response']['RequestID'] : 1;
   $responsekey = isset($request['@response']['ResponseKey']) ? $request['@response']['ResponseKey'] : '';
 
-  $targetfeedid = isset( $request['@request']['callback']['feedsprefix'] ) ? $request['@request']['callback']['feedsprefix'] : QBXML_FEEDS_PREFIX;
-  $targetfeedid .= strtolower($responsekey);
-  if( isset(_feeds_importer_digest()[$targetfeedid]) && ($source = feeds_source( $targetfeedid )) ) {
-    if( $source->importer->fetcher->hasSourceConfig() ) {
-      $class = get_class($source->importer->fetcher);
-      if ($class == 'FeedsFileFetcher') {
-        $sourceconfig = $source->getConfig();
-        $importerconfig = $source->importer->getConfig();
-        $filename = _qbxml_filename( $bookid, $requestID, 's' );
-        file_unmanaged_save_data($item->asXML(), $filename);
-        $sourceconfig[ 'FeedsFileFetcher' ][ 'source' ] = $filename;
+  $feedsprefix = isset( $request['@request']['callback']['feedsprefix'] ) ? $request['@request']['callback']['feedsprefix'] : QBXML_FEEDS_PREFIX;
+  $camelarray = array();
+  preg_match_all( '/[A-Z][a-z]+/', $responsekey, $camelarray );
+  while( $camelarray[0] ) {
+    $feedid = $feedsprefix . strtolower(implode($camelarray[0]));
+    $lastterm = array_pop($camelarray[0]);
+    if (isset(_feeds_importer_digest()[$feedid]) && ($source = feeds_source($feedid))) {
+      if ($source->importer->fetcher->hasSourceConfig()) {
+        $class = get_class($source->importer->fetcher);
+        if ($class == 'FeedsFileFetcher') {
+          $sourceconfig = $source->getConfig();
+          $importerconfig = $source->importer->getConfig();
+          $filename = _qbxml_filename($bookid, $requestID, 's');
+          file_unmanaged_save_data($item->asXML(), $filename);
+          $sourceconfig['FeedsFileFetcher']['source'] = $filename;
 
-        // $source->importer->addConfig( array( 'process_in_background' => FALSE ) ); // let it keep setting from .inc file
-        $source->setConfig($sourceconfig);
-        if( $importerconfig['process_in_background'] ) {
-          variable_set( 'qbxml_feeds_process_limit', variable_get('feeds_process_limit', 50) ); // If uncommented, this shows how to alter the chunk sizes for cron to process in background
-          variable_set('feeds_process_limit', 2000);
-        } 
-        $source->startImport();
-        while( !$importerconfig['process_in_background'] && (FEEDS_BATCH_COMPLETE != $source->import()) ); // use this to process if process_in_background not set
-        return (TRUE);
+          // $source->importer->addConfig( array( 'process_in_background' => FALSE ) ); // let it keep setting from .inc file
+          $source->setConfig($sourceconfig);
+          if ($importerconfig['process_in_background']) {
+            variable_set('qbxml_feeds_process_limit', variable_get('feeds_process_limit', 50)); // If uncommented, this shows how to alter the chunk sizes for cron to process in background
+            variable_set('feeds_process_limit', 2000);
+          }
+          $source->startImport();
+          while (!$importerconfig['process_in_background'] && (FEEDS_BATCH_COMPLETE != $source->import())) {
+            ;
+          } // use this to process if process_in_background not set
+          return (TRUE);
+        }
       }
     }
   }

@@ -1,0 +1,1 @@
+<?php print $value[0]['amount'] ?? ''; ?>

@@ -8,11 +8,14 @@
 
 // magic strings
 define( 'QBXMLMsgsRq', 'QBXMLMsgsRq' );
-define( 'QBXML_FORM_REQUEST_PREFIX', '_qbxml_request_' ); // prefix a form element name with this to have it get put into the @request info
+define( 'QBXML_FORM_SPECIAL', '_qbxml_' ); // claim a namespace for form elements for QBXML control
+define( 'QBXML_FORM_REQUEST_PREFIX', QBXML_FORM_SPECIAL . 'rq_' ); // prefix a form element name with this to have it get put into the @request info
 define( 'QBXML_FORM_NAMEMAP_PREFIX', 'qbxml_'); // prefix a form element name with this to map the remainder of the name directly to QBXML
-define( 'QBXML_FORM_RAWQUERY', '_qbxml_rawquery' ); // call a form element this and the query will get tacked onto the end of the QBXML request
-define( 'QBXML_FORM_REQUESTCMD', '_qbxml_requestcmd' ); // set QBXML request command to this
-define( 'QBXML_FORM_REQROOT', '_qbxml_reqroot' ); // root of a QBXML request command (eg. "Account, Terms, Customer, etc.)
+define( 'QBXML_FORM_RAWQUERY', QBXML_FORM_SPECIAL . 'raw' ); // call a form element this and the query will get tacked onto the end of the QBXML request
+define( 'QBXML_FORM_REQUEST_OPCODE', QBXML_FORM_SPECIAL . 'opcode' ); // set QBXML request command to this
+define( 'QBXML_FORM_REQUEST_BASE', QBXML_FORM_SPECIAL . 'base' ); // root of a QBXML request command (eg. "Account, Terms, Customer, etc.)
+define( 'QBXML_THEME', '#qbxml_theme' );
+define( 'QBXML_MAP', '#qbxml_map' );
   
 // Filesystem access 
 // Incoming and outgoing QBXML requests and responses are stored in this directory.
