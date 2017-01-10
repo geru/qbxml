@@ -9,7 +9,6 @@
  * Implements hook_feeds_after_import()
  */
 function qbxml_feeds_after_import(FeedsSource $source) {
-  // watchdog( 'POST_IMPORT', 'source=' . _var_dump2str($source) );
   if (isset($source->exception)) {
     watchdog( 'POST_IMPORT', 'exception=' . var_dump($source->exception) );
     watchdog('QBXML', 'An exception occurred during importing!');

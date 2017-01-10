@@ -41,7 +41,7 @@ function qbxml_menu() {
     'description' => 'QBXML operations and import',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('qbxml_admin_operations_form'),
-    'access arguments' => array('administer administration pages'),
+    'access arguments' => array('access administration pages'),
     'file' => 'qbxml.admin.inc',
     'file path' => drupal_get_path('module', 'qbxml'),
     'type' => MENU_NORMAL_ITEM,
@@ -101,7 +101,7 @@ function qbxml_theme($existing, $type, $theme, $path) {
   }
   $qbxmlext = '\.qbxml\.tpl\.php$';
   $qbxmlfilescanpattern = "/(.+)\/(\w+)$qbxmlext/";
-  foreach( array($path . '/theme', 'sites/all') as $searchdir ) {
+  foreach( array($path . '/theme', 'sites/all/libraries/qbxml', 'sites/all/themes/qbxml') as $searchdir ) {
     $outfiles = file_scan_directory($searchdir, "/$qbxmlext/");
     foreach ($outfiles as $absolute => $filename) {
       $matches = array();
@@ -144,86 +144,6 @@ function qbxml_qbxml_importers() {
 }
 
 // Functionality provided by qbxml module ---
-
-/*
- * qbxml mapping function for qbxml operations form
-
-function qbxml_form_mapQBXML( &$form_state, $mapterms=array(), $mappingfunc=NULL ) {
-  $weight = 0;
-  $mapping = array(
-    'opcode' => array(
-      'Query' => array(
-        'activestatus' => 'ActiveStatus',
-        'datetimefrom' => array( 'key' => 'FromModifiedDate', 'theme' => 'qbxml_datetime' ),
-        'datetimeto' => array( 'key' => 'ToModifiedDate', 'theme' => 'qbxml_datetime' ),
-        'maxreturned' => 'MaxReturned',
-      ),
-      'Add' => array(
-        'isactive' => array( 'key' => 'IsActive', 'theme' => 'qbxml_truefalse' ),
-        'name' => 'Name',
-        'extid' => 'ListID',
-        'description' => 'Desc',
-        'editsequence' => 'EditSequence',
-      ),
-      'Mod' => array(
-        'isactive' => array( 'key' => 'IsActive', 'theme' => 'qbxml_truefalse' ),
-        'name' => 'Name',
-        'extid' => 'ListID',
-        'description' => 'Desc',
-        'editsequence' => 'EditSequence',
-      ),
-    ),
-    'base' => array(
-      'Account' => array(
-        'maxreturned' => NULL,
-        'bc_class' => 'AccountType',
-      ),
-    ),
-    'query' => array(
-      'AccountAdd' => array(
-        'name' =>               array( 'key' => 'AccountAdd_Name',     'force' => 'string', 'weight' => ++$weight ),
-        'isactive' =>           array( 'key' => 'AccountAdd_IsActive', 'theme' => 'qbxml_truefalse', 'weight' => ++$weight ),
-        'extid' =>              array( 'key' => 'AccountAdd_ParentRef_ListID', 'weight' => ++$weight ),
-        'bc_class' =>           array( 'key' => 'AccountAdd_AccountType', 'weight' => ++$weight ),
-        'data_accountnumber' => array( 'key' => 'AccountAdd_AccountNumber', 'weight' => ++$weight ),
-        'data_banknumber' =>    array( 'key' => 'AccountAdd_BankNumber', 'weight' => ++$weight ),
-        'description' =>        array( 'key' => 'AccountAdd_Desc', 'weight' => ++$weight ),
-        'bc_value' =>           array( 'key' => 'AccountAdd_OpenBalance', 'theme' => 'qbxml_price_nocurrency', 'weight' => ++$weight),
-        'data_taxlineid' =>     array( 'key' => 'AccountAdd_TaxLineID', 'weight' => ++$weight ),
-      ),
-    ),
-  );
-  if( !$mappingfunc ) {
-    $mappingfunc = $form_state['complete form']['#form_id'] . '_mapQBXML';
-  }
-  if( function_exists($mappingfunc) ) {
-    $mapping = array_merge( $mapping, $mappingfunc() );
-  }
-
-  // clear all mappings
-  foreach( array_keys($form_state['input']) as $key ) {
-    if( isset($form_state['complete form'][$key][QBXML_MAP]) ) {
-      unset( $form_state['complete form'][$key][QBXML_MAP] );
-    }
-  }
-  foreach( $mapterms as $termtype => $term ) {
-    foreach( $form_state['input'] as $key => $value ) {
-      if( isset($mapping[$termtype][$term]) ) {
-        if (array_key_exists($key, $mapping[$termtype][$term])) {
-          if ($value && !empty($mapping[$termtype][$term][$key]['force'])) {
-            if (is_null($mapping[$termtype][$term][$key])) {
-              unset($form_state['complete form'][$key][QBXML_MAP]);
-            }
-            else {
-              $form_state['complete form'][$key][QBXML_MAP] = $mapping[$termtype][$term][$key];
-            }
-          }
-        }
-      }
-    }
-  }
-}
-*/
 
 /*
  * qbxml's uri to store files in
@@ -283,14 +203,7 @@ function _qbxml_gen_attributes( $attributes ) {
   return $ret;
 }
 
-/*
- * tell if an array is associative
 
-function _qbxml_array_isassoc(array $arr) {
-  if (array() === $arr) return false;
-  return array_keys($arr) !== range(0, count($arr) - 1);
-}
-*/
 /**
  * @param $array
  * @param null $parentkey
@@ -337,79 +250,6 @@ function _qbxml_array_to_xml(&$array, $parentkey=NULL, $attributes='' ) {
   
   return $output;
 }
-
-/*
- * generate arbitrarily deep nested array element
-
-function _qbxml_set_deep_array_element( &$ret, array &$keys, $value ) {
-  $key = array_shift( $keys );
-  if( !count($keys) ) {
-    $ret[$key] = $value;
-    return;
-  }
-  if( !isset( $ret[$key] ) ) {
-    $ret[$key] = array();
-  }
-  _qbxml_set_deep_array_element( $ret[$key], $keys, $value );
-}
-*/
-/*
- * Theme something based on qbxml theme rather than its set theme
-
-function qbxml_theme_element( $element, $theme=NULL ) {
-  if( !$theme ) {
-    $theme = isset($element[QBXML_MAP]['theme'])
-      ? $element[QBXML_MAP]['theme']
-      : NULL;
-  } // change #theme and restore after
-
-  if( is_array( $element ) ) {
-    $value = array( 'value' => $element['und'] ?? '' );
-  } else {
-    $value = array('value' => $element);
-  }
-
-  return $theme
-    ? theme( $theme, $value )
-    : $value['value'];
-}
-*/
-/*
- * Process a form with QBXML mapping overlay and produce well-formed QBXML array
- * generates XML based on:
- * - name minus 'qbxml_' prefix
- * - 'complete form' #qbxml_map mappings
- * - 'complete form' #qbxml_theme theming information
-
-function qbxml_form_generate_qbxml_array( $form_state, &$maxreturned=NULL ) {
-  $ret = array();
-  foreach( $form_state['input'] as $key => $value ) {
-    if ($value) {
-      if (isset($form_state['complete form'][$key][QBXML_MAP])) { // (set the bunch, then sort by weight, then output all)
-        // get themed value
-        $value = qbxml_theme_element( $form_state['input'][$key], $form_state['complete form'][$key][QBXML_MAP]['theme'] ?? NULL );
-        $mapping = is_array($form_state['complete form'][$key][QBXML_MAP])
-          ? $form_state['complete form'][$key][QBXML_MAP]['key']
-          : $form_state['complete form'][$key][QBXML_MAP];
-        $QBXML_map_list = explode('+', $mapping);
-        foreach ($QBXML_map_list as $map_this) {
-          if( !is_null($maxreturned)) {
-            if (stristr($map_this, 'maxreturned') && ($value) && !$maxreturned) {
-              $maxreturned = $value;
-            }
-          }
-          $array_keys = explode('_', $map_this);
-          _qbxml_set_deep_array_element($ret, $array_keys, $value);
-        }
-      }
-    }
-  }
-  if( !empty($form_state['input'][QBXML_FORM_RAWQUERY]) ){
-    $ret['@raw'] = $form_state['input'][QBXML_FORM_RAWQUERY];
-  }
-  return $ret;
-}
-*/
 
 /*
  * Process a form with QBXML mapping overlay and produce well-formed QBXML arraty

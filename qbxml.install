@@ -8,8 +8,6 @@
  * Download the schema module to auto-generate a schema array for a table:
  * http://drupal.org/project/schema.
  *
- * In this file, we're adding hook_install(), hook_uninstall() and hook_schema(). Notice
- * the variable_del()'s in hook_uninstall.
  */
 
 /**

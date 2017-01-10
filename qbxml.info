@@ -3,10 +3,3 @@ description = Manage incoming and outgoing QBXML messages
 package = Enterprise
 core = 7.x
 configure = admin/enterprise/qb/qbxml/admin
-
-; files[] = qbxml.module
-; files[] = qbxml.admin.inc
-
-dependencies[] = rules
-; dependencies[] = entity_view_mode
-

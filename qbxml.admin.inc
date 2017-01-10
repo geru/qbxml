@@ -11,19 +11,21 @@ require_once 'qbxml.inc';
 /**
  * Builds and returns the admin settings form.
  */
-function qbxml_admin_settings_form() { 
+function qbxml_admin_settings_form() {
   $form[QBXML_FURI] = array(
-      '#title' => t('QBXML incoming and outgoing file directory (recommended to be private)'),
-      '#type' => 'textfield',
-      '#default_value' => variable_get(QBXML_FURI) ? variable_get(QBXML_FURI) : 'private://qbxml',
-      '#description' => t('Set the directory path for storing QBXML requests and responses.'),
-      '#required' => TRUE,
-    ); 
-  
+    '#title' => t('QBXML incoming and outgoing file directory (recommended to be private)'),
+    '#type' => 'textfield',
+    '#default_value' => variable_get(QBXML_FURI) ? variable_get(QBXML_FURI) : 'private://qbxml',
+    '#description' => t('Set the directory path for storing QBXML requests and responses.'),
+    '#required' => TRUE,
+  );
+
   return system_settings_form($form);
 }
 
 /**
+ * This is just a quick and dirty form to generate QBXML messages. Useful for
+ * generating import queries.
  * Build and return the admin operations form.
  */
 function qbxml_admin_operations_form() {
@@ -108,7 +110,12 @@ function qbxml_admin_operations_form() {
   $form['activestatus'] = array(
     '#title' => t('Active status'),
     '#type' => 'radios',
-    '#options' => array( 0 => 'Not set', 'ActiveOnly' => 'Active', 'InactiveOnly' => 'Inactive', 'All' => 'All' ),
+    '#options' => array(
+      0 => 'Not set',
+      'ActiveOnly' => 'Active',
+      'InactiveOnly' => 'Inactive',
+      'All' => 'All'
+    ),
     '#default_value' => 'All',
     '#description' => t('Active status of desired data.'),
   );
@@ -139,7 +146,7 @@ function qbxml_admin_operations_form() {
     '#type' => 'textarea',
     '#description' => t('Type properly formatted QBXML for the operation. NOT RECOMMENDED'),
   );
-  
+
   // set $form['#theme']
   return $form;
 }
@@ -155,40 +162,17 @@ function qbxml_admin_operations_form_mapQBXML() {
  * Submit function for input_simple_form().
  **/
 function qbxml_admin_operations_form_submit($form_id, &$form_state) {
-  drupal_set_message(t('The operation has been submitted - you are here.'));
+  drupal_set_message(t('The operation has been submitted.'));
 
   $requests = array();
   // create array to be rendered by format_xml_elements
   // multiple QBXMLMmsgsRq elements are allowed. We are assuming just a single one, but the Rule expects one or more in an array
-  foreach( $form_state['input'][QBXML_FORM_REQUEST_BASE] as $listindex ) {
+  foreach ($form_state['values'][QBXML_FORM_REQUEST_BASE] as $listindex) {
 
     $qbcmd_base = $form_state['complete form'][QBXML_FORM_REQUEST_BASE]['#options'][$listindex];
-    $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['input'][QBXML_FORM_REQUEST_OPCODE]];
-    $requests += qbxml_form_generate_request( $form_state, $qbcmd_base, $qbcmd_opcode );
+    $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
+    $requests += qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
   }
   // rules_invoke_component( 'qbxml_q_action_add_render_array_to_out_queue', $QBXMLMsgsRqs );
-  qbxml_action_add_xml_array_to_out_queue( $form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests) );
+  qbxml_action_add_xml_array_to_out_queue($form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests));
 }
-
-/**
- * Submit function for input_simple_form().
-function qbxml_admin_operations_form_submit($form_id, &$form_state) {
-  drupal_set_message(t('The operation has been submitted - you are here.'));
-
-  $requests = array();
-  // create array to be rendered by format_xml_elements
-  // multiple QBXMLMmsgsRq elements are allowed. We are assuming just a single one, but the Rule expects one or more in an array
-  foreach( $form_state['input']['list'] as $listindex ) { 
-    // stepping well outside of the box with qbxml theme-based functions returning qbxml associative array instead of HTML string
-    $qbxmlcommand = ucfirst($qbxmlbase) . ucfirst($qbxmlreq) . 'Rq';
-    $requests[]
-    $requests[ += theme( 'qbxml__' .  . '__' . , 
-      $form_state['complete form'] );
-  }
-  // rules_invoke_component( 'qbxml_q_action_add_render_array_to_out_queue', $QBXMLMsgsRqs );
-  qbxml_action_add_xml_array_to_out_queue( $form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests) );
-}
- **/
-
-
-
