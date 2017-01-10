@@ -252,6 +252,21 @@ function _qbxml_array_to_xml(&$array, $parentkey=NULL, $attributes='' ) {
 }
 
 /*
+ * generate arbitrarily deep nested array element
+ */
+function _qbxml_set_deep_array_element( &$ret, array &$keys, $value ) {
+  $key = array_shift( $keys );
+  if( !count($keys) ) {
+    $ret[$key] = $value;
+    return;
+  }
+  if( !isset( $ret[$key] ) ) {
+    $ret[$key] = array();
+  }
+  _qbxml_set_deep_array_element( $ret[$key], $keys, $value );
+}
+
+/*
  * Process a form with QBXML mapping overlay and produce well-formed QBXML arraty
  * generates XML based on:
  * - name minus 'qbxml_' prefix
