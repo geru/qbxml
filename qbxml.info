@@ -3,3 +3,5 @@ description = Manage incoming and outgoing QBXML messages
 package = Enterprise
 core = 7.x
 configure = admin/enterprise/qb/qbxml/admin
+
+dependencies[] = qbwc

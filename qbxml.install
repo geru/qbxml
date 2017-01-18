@@ -51,7 +51,12 @@ function qbxml_schema() {
         'type' => 'text',
         'size' => 'big',
         'serialize' => TRUE,
-      )
+      ),
+      'data' => array(
+        'description' => 'Extraneous extra information can get stashed in JSON-encoded array',
+        'type' => 'blob',
+        'size' => 'big',
+      ),
     ),
     'primary key' => array('rid'),
     'indexes' => array( 'group_id' => array( 'gid' ), 'bookid' => array( 'bookid' ) ),

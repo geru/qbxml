@@ -86,12 +86,22 @@ function qbxml_admin_operations_form() {
     '#required' => TRUE,
   );
 
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Send request to Quickbooks')
+  $form['advanced'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Advanced settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
   );
 
-  $form[QBXML_FORM_REQUEST_PREFIX . 'callback_feedsprefix'] = array(
+  $form['advanced']['bookid'] = array(
+    '#title' => t('Book machine ID'),
+    '#type' => 'textfield',
+    '#description' => t('This is a book that will receive the data.'),
+    '#default_value' => function_exists('_bc_entity_user_default_bookid') ? _bc_entity_user_default_bookid() : 0,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
+
+  $form['advanced'][QBXML_FORM_REQUEST_PREFIX . 'callback_feedsprefix'] = array(
     '#title' => t('Feeds importer prefix'),
     '#type' => 'textfield',
     '#default_value' => QBXML_FEEDS_PREFIX,
@@ -99,15 +109,7 @@ function qbxml_admin_operations_form() {
     '#description' => t('Feeds importer name = prefix . incomingresponse')
   );
 
-  $form['bookid'] = array(
-    '#title' => t('Book machine ID'),
-    '#type' => 'textfield',
-    '#default_value' => '1',
-    '#description' => t('This is a book that will receive the data.'),
-    '#element_validate' => array('element_validate_integer_positive'),
-  );
-
-  $form['activestatus'] = array(
+  $form['advanced']['activestatus'] = array(
     '#title' => t('Active status'),
     '#type' => 'radios',
     '#options' => array(
@@ -120,42 +122,48 @@ function qbxml_admin_operations_form() {
     '#description' => t('Active status of desired data.'),
   );
 
-  $form['maxreturned'] = array(
+  $form['advanced']['maxreturned'] = array(
     '#title' => t('Chunk size'),
     '#type' => 'textfield',
+    '#default_value' => '50', // seems to be a nice safe number
     '#description' => t('How many return elements at a time.'),
     '#element_validate' => array('element_validate_integer_positive'),
   );
 
-  $form['timedatefrom'] = array(
+  $form['advanced']['timedatefrom'] = array(
     '#title' => t('Date from'),
     '#type' => 'textfield',
     '#description' => t('Date from (YYYY-MM-DD[ hh:mm:ss]'),
-    // QBXML_THEME => 'qbxml_theme',
   );
 
-  $form['timedateto'] = array(
+  $form['advanced']['timedateto'] = array(
     '#title' => t('Date to'),
     '#type' => 'textfield',
     '#description' => t('Date to (YYYY-MM-DD[ hh:mm:ss]'),
-    // QBXML_THEME => 'qbxml_theme',
   );
 
-  $form[QBXML_FORM_RAWQUERY] = array(
+  $form['advanced'][QBXML_FORM_RAWQUERY] = array(
     '#title' => t('raw QBXML query'),
     '#type' => 'textarea',
     '#description' => t('Type properly formatted QBXML for the operation. NOT RECOMMENDED'),
   );
 
-  // set $form['#theme']
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send request to Quickbooks')
+  );
+
   return $form;
 }
 
 /*
- * Callback to generate QBXML mapping (form_id_mapQBXML)
+ * Implements hook_form_validate()
  */
-function qbxml_admin_operations_form_mapQBXML() {
-  return array();
+function qbxml_admin_operations_form_validate($form_id, &$form_state) {
+  $bookid = $form_state['values']['bookid'];
+  if( !function_exists('_bc_entity_user_accesses_book') || !_bc_entity_user_accesses_book($bookid) ) {
+    form_set_error( 'QBXML', t('You need access to bookID :bookid. See your site administrator.', array(':bookid' => $bookid)));
+  }
 }
 
 /**
@@ -173,6 +181,6 @@ function qbxml_admin_operations_form_submit($form_id, &$form_state) {
     $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
     $requests += qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
   }
-  // rules_invoke_component( 'qbxml_q_action_add_render_array_to_out_queue', $QBXMLMsgsRqs );
-  qbxml_action_add_xml_array_to_out_queue($form_state['input']['bookid'], qbxml_generate_qbxmlmsgsrq($requests));
+
+  qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($requests));
 }

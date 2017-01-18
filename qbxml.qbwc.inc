@@ -141,7 +141,8 @@ function qbxml_import( $bookid, $response ) {
         continue;
       }
       $groupowner = $source->gid;
-      $request = json_decode($source->request, TRUE);
+      $data = json_decode($source->data, TRUE);
+      $request = &$data['request'];
       $request['@response'] = array(
         'RequestID' => $requestID,
         'BookID' => $bookid,
@@ -217,8 +218,7 @@ function qbxml_import( $bookid, $response ) {
 /*
  * Implements hook_qbwc_receiveResponseXML().
  */
-function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $company) {
-  // $queue_out = DrupalQueue::get(QBXML_OUT, TRUE);
+function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
   $ret = 100;
   if (!$response) {
     watchdog('QBXML', 'ReceiveResponse no response returning 0');
@@ -244,5 +244,4 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $company) {
  */
 function qbxml_qbwc_closeConnection( $bookid, $response ) {
   _qbxml_request_set_state(0, 'e', $bookid); // request stays in database and is marked as error
-  // tod
 }

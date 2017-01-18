@@ -125,13 +125,17 @@ function qbxml_theme($existing, $type, $theme, $path) {
 function theme_qbxml( $var ) {
   $base = $var['qbxml_base'] ?? '';
   $output = '';
-  if( isset($var['input']['activestatus']) ) {
-    $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
-  }
   if( !empty($var['input']['maxreturned']) ) {
-    if( $base != 'Account' ) {
+    if( in_array($base, array('Lead', 'Customer', 'Vendor', 'Entity', 'ItemService', 'ItemNonInventory', 'ItemOtherCharge', 'ItemInventory', 'ItemInventoryAssembly',
+      'ItemFixedAsset', 'ItemSubtotal', 'ItemDiscount', 'ItemPayment', 'ItemSalesTax', 'ItemSalesTaxGroup', 'ItemGroup', 'Item', 'Invoice', 'Estimate', 'SalesOrder',
+      'SalesReceipt', 'CreditMemo', 'ReceivePayment', 'Charge', 'PurchaseOrder', 'Bill', 'ItemReceipt', 'VendorCredit', 'BillPaymentCheck', 'BillPaymentCreditCard',
+      'SalesTaxPaymentCheck', 'InventoryAdjustment', 'TimeTracking', 'Check', 'CreditCardCharge', 'CreditCardCredit', 'JournalEntry', 'Deposit', 'Transaction',
+      'BuildAssembly', 'ARRefundCreditCard', 'VehicleMileage', 'TransferInventory', 'ItemSites', 'BarCode', 'Transfer', '') ) ) {
       $output .= '<MaxReturned>' . $var['input']['maxreturned'] . '</MaxReturned>';
     }
+  }
+  if( isset($var['input']['activestatus']) ) {
+    $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
   }
   return( $output );
 }
@@ -175,7 +179,7 @@ function _qbxml_request_delete( $bookid, $requestID ) {
  * Store a single request in database and return its newly found ID number
  * Request is timestamped and serialized
 */
-function _qbxml_request_stash( $bookid, $groupID, $request, $state='q' ) {
+function _qbxml_request_stash( $bookid, $groupID, $data, $state='q' ) {
   return(
   db_insert('qbxml')
     ->fields( array(
@@ -183,7 +187,7 @@ function _qbxml_request_stash( $bookid, $groupID, $request, $state='q' ) {
         'gid' => $groupID,
         'state' => $state,
         'created' => REQUEST_TIME,
-        'request' => json_encode($request),
+        'data' => json_encode($data),
       ) )->execute()
   );
 }
@@ -351,7 +355,7 @@ function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
         ),
         'key' => $requestkey,
       );
-      $requestID = _qbxml_request_stash($bookid, $request['@request']['groupID'], $request);
+      $requestID = _qbxml_request_stash($bookid, $request['@request']['groupID'], array( 'request' => &$request) );
       $request['@attributes']['requestID'] = $requestID;
       if (!$groupID ) {
           $groupID = $requestID;
