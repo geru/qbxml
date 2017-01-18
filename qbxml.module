@@ -7,7 +7,7 @@ require_once 'qbxml.inc';
 
 /**
  * @file
- * QB XML test module
+ * QBXML module
  */
 
 /**
