@@ -25,23 +25,23 @@ various theme hook suggestions and scans for implemented QBXML template files to
 REQUIREMENTS
 ------------
 
-QBXML has no dependencies and no requirements.
+QBXML requires the Quickbooks Webconnector (QBWC) module. QBXML uses hooks to and from the Quickbooks Webconnector
+(QBWC) to communicate with Quickbooks. So, no communications with Quickbooks will happen without successfully installing
+and configuring the QBWC module.
 
 RECOMMENDED MODULES
 -------------------
 
-It is highly recommended that you install the Quickbooks Webconnector (QBWC) module. QBXML uses hooks to and from the
-Quickbooks Webconnector (QBWC) to communicate with Quickbooks. So, no communications with Quickbooks will happen without
-successfully installing and configuring the QBWC module.
+QBXML is designed with the Feeds module in mind. It also defines a default import function that uses Feeds. Without the
+Feeds module installed, you will need to implement your own import functionality.
 
-QBXML is designed with the Feeds module in mind. It also defines a default import function that uses
-Feeds. Without the Feeds module installed, you will need to implement your own import functionality.
+Finally, there needs to be some place for the data to go when it comes in. The bc_entity module provides default Drupal
+data structures to store much of the Quickbooks data as well as a bc_entity_import module that defines Feeds importers
+for these data structures.
 
-Finally, there needs to be some place for the data to go when it comes in. The Beancount Entity (bc_entity) module provides default
-Drupal data structures to store much of the Quickbooks data.
+QBWC, QBXML, and BC_Entity all use a BookID model for collating input and output and associating the data streams with
+the proper data sets in Drupal.
 
-QBWC, QBXML, and BC_Entit all use a BookID model for collating input and output and associating the data streams with the proper
-data sets in Drupal.
 
 INSTALLATION
 ------------
@@ -53,7 +53,9 @@ CONFIGURATION
 
 If you will be using the standard Feeds-based importer defined by QBXML, then you may wish to configure the directory
 used to store incoming and outgoing QBXML messages. These files contain private, sensitive data and so the directory
-should be secured from prying eyes.
+should be secured from prying eyes. By default, QBXML uses a directory called "qbxml" in the private: uri. So, if you
+have not configured your private directory (this is the case in Drupal by default), then you will get many error
+messages until you define the private directory in /admin/config/media/file-system.
 
 QBXML also defines the QBXML theme for formatting outgoing QBXML messages.
 
@@ -85,13 +87,8 @@ Because a Feeds importer must know the internal data representations, and the QB
 internal data representation, QBXML doesn't define any importers. You therefore need some other module to create the
 internal data structure and provide the importer for the data.
 
-The Beancount Entity module provides data structures and importers for many Quickbooks datasets.
+The Bc_Entity module provides data structures and importers for many Quickbooks datasets.
 
-Therefore, if you install this module, the QBWC module, and the Beancount Entity and Beancount Entity Import modules,
-you would have a fully working system for synchronizing data between Drupal and Quickbooks. You are also welcome to
-implement your own modules for storing and importing data.
-
-TROUBLESHOOTING
----------------
-
-If you define a Feeds Importer named qbxml_import_account, then this
+Therefore, if you install this module, the QBWC module, and the Bc_Entity and Bc_Entity_Import modules, you would have a
+fully working system for synchronizing data between Drupal and Quickbooks. You are also welcome to implement your own
+modules for storing and importing data.

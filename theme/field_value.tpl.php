@@ -1,1 +1,1 @@
-<?php print $value['und'] ?? $value;
+<?php print empty($value['und']) ? $value : $value['und'];

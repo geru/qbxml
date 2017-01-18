@@ -2,6 +2,6 @@ name = Quickbooks XML
 description = Manage incoming and outgoing QBXML messages
 package = Enterprise
 core = 7.x
-configure = admin/enterprise/qb/qbxml/admin
+configure = admin/config/enterprise/qbxml_admin
 
 dependencies[] = qbwc

@@ -15,7 +15,7 @@ function qbxml_admin_settings_form() {
   $form[QBXML_FURI] = array(
     '#title' => t('QBXML incoming and outgoing file directory (recommended to be private)'),
     '#type' => 'textfield',
-    '#default_value' => variable_get(QBXML_FURI) ? variable_get(QBXML_FURI) : 'private://qbxml',
+    '#default_value' => variable_get(QBXML_FURI, 'private://qbxml'),
     '#description' => t('Set the directory path for storing QBXML requests and responses.'),
     '#required' => TRUE,
   );
@@ -70,7 +70,7 @@ function qbxml_admin_operations_form() {
     '#title' => t('Quickbooks list'),
     '#type' => 'select',
     '#options' => $qb_list,
-    '#description' => t('Select a list to import.'),
+    '#description' => t('Select list(s) to import.'),
     '#size' => 15,
     '#multiple' => TRUE,
     '#required' => TRUE,
@@ -161,8 +161,8 @@ function qbxml_admin_operations_form() {
  */
 function qbxml_admin_operations_form_validate($form_id, &$form_state) {
   $bookid = $form_state['values']['bookid'];
-  if( !function_exists('_bc_entity_user_accesses_book') || !_bc_entity_user_accesses_book($bookid) ) {
-    form_set_error( 'QBXML', t('You need access to bookID :bookid. See your site administrator.', array(':bookid' => $bookid)));
+  if (!function_exists('_bc_entity_user_accesses_book') || !_bc_entity_user_accesses_book($bookid)) {
+    form_set_error('QBXML', t('You need access to bookID :bookid. See your site administrator.', array(':bookid' => $bookid)));
   }
 }
 

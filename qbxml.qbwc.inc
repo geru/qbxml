@@ -35,14 +35,14 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
     $num = db_update( 'qbxml' )
       ->fields(array('state' => $state ))
       ->condition( 'rid', $rid )
-      ->condition( 'state', array('s', 'i'), IN ) // mark pending operations (sent, iterating, etc.) as state indicated
+      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING), IN ) // mark pending operations (sent, iterating, etc.) as state indicated
       ->execute();
   }
   else {
     $num = db_update( 'qbxml' ) // update by bookid only for sent ones, this is for setting error state
       ->fields(array('state' => $state ))
       ->condition( 'bookid', $bookid )
-      ->condition( 'state', 's' )
+      ->condition( 'state', QBXML_STATE_SENT )
       ->execute();
   }
   return $num;
@@ -65,7 +65,7 @@ function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
       file_unmanaged_delete($absolute);
       preg_match($matchpattern, $filename->filename, $matches);
       _qbxml_request_sendtime_set_init($matches[1]);
-      _qbxml_request_set_state($matches[1], 's');
+      _qbxml_request_set_state($matches[1], QBXML_STATE_SENT);
       break;
     }
   }
@@ -137,7 +137,7 @@ function qbxml_import( $bookid, $response ) {
         ->execute()
         ->fetchObject();
       if( !$source ) {
-        watchdog( 'QPROC_IN', 'Unexpected incoming requestID ' . $requestID . '' );
+        watchdog( 'QBXML', 'Unexpected incoming requestID ' . $requestID . '' );
         continue;
       }
       $groupowner = $source->gid;
@@ -163,7 +163,7 @@ function qbxml_import( $bookid, $response ) {
           $xmlstr = _qbxml_array_to_xml($newrequest, 'QBXML');
           file_unmanaged_save_data( $xmlstr, _qbxml_filename( $bookid, $requestID, 'q' ) );
           $deleterequest = FALSE;
-          _qbxml_request_set_state( $requestID, 'i' );
+          _qbxml_request_set_state( $requestID, QBXML_STATE_ITERATING );
         }
       }
 
@@ -203,7 +203,7 @@ function qbxml_import( $bookid, $response ) {
         }
       }
       // mark as response received but not processed
-      _qbxml_request_set_state( $requestID, 'u' );
+      _qbxml_request_set_state( $requestID, QBXML_STATE_UNPROCESSED );
     }
   }
   $recsleft = db_select( 'qbxml', 'q' )
@@ -230,7 +230,7 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
       watchdog('QBXML', "Quickbooks error Book#$bookid\n" . print_r($response, true));
       // find open requests for bookid, mark as incomplete and set flag for admin to re-queue individually
       // @todo: set event or flag for admin
-      _qbxml_request_set_state( 0, 'e', $bookid );
+      _qbxml_request_set_state( 0, QBXML_STATE_ERROR, $bookid );
     }
     else {
       $ret = qbxml_import($bookid, $response->response);
@@ -243,5 +243,5 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
  * Implements hook_qbwc_closeConnection()
  */
 function qbxml_qbwc_closeConnection( $bookid, $response ) {
-  _qbxml_request_set_state(0, 'e', $bookid); // request stays in database and is marked as error
+  _qbxml_request_set_state(0, QBXML_STATE_ERROR, $bookid); // request stays in database and is marked as error
 }

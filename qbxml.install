@@ -29,7 +29,6 @@ function qbxml_schema() {
       'bookid' => array(
         'description' => 'book machine id',
         'type' => 'int',
-
       ),
       'created' => array(
         'description' => 'The Unix timestamp when this request was created.',
@@ -43,23 +42,17 @@ function qbxml_schema() {
       ),
       'state' => array(
         'description' => 'State of request',
-        'type' => 'varchar', // 'q'=queued, 's'=sent, 'e'=error, 'i'=iterating, 'u'=unprocessed but responded to
+        'type' => 'varchar', // states are one-letter codes defined in qbxml.inc
         'length' => 1,
       ),
-      'request' => array(
-        'description' => 'QBXML request',
-        'type' => 'text',
-        'size' => 'big',
-        'serialize' => TRUE,
-      ),
       'data' => array(
-        'description' => 'Extraneous extra information can get stashed in JSON-encoded array',
+        'description' => 'Requests and other information get stashed in JSON-encoded array',
         'type' => 'blob',
         'size' => 'big',
       ),
     ),
     'primary key' => array('rid'),
-    'indexes' => array( 'group_id' => array( 'gid' ), 'bookid' => array( 'bookid' ) ),
+    'indexes' => array('group_id' => array('gid'), 'bookid' => array('bookid')),
   );
-  return( $schema );
+  return ($schema);
 }

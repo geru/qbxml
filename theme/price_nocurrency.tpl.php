@@ -1,1 +1,1 @@
-<?php print $value[0]['amount'] ?? ''; ?>
+<?php print empty($value[0]['amount']) ? '' : $value[0]['amount'];?>
