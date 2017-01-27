@@ -35,7 +35,7 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
     $num = db_update( 'qbxml' )
       ->fields(array('state' => $state ))
       ->condition( 'rid', $rid )
-      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING), IN ) // mark pending operations (sent, iterating, etc.) as state indicated
+      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING), 'IN' ) // mark pending operations (sent, iterating, etc.) as state indicated
       ->execute();
   }
   else {
@@ -75,7 +75,7 @@ function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
 /*
  * Implements a qbxml importer registered with hook_qbxml_importer()
  */
-function qbxml_feeds_import( $request, $item ){
+function qbxml_feeds_import( &$request, $item ){
   if( !$request ) {
     return( FALSE );
   }
@@ -89,6 +89,8 @@ function qbxml_feeds_import( $request, $item ){
   while( $camelarray[0] ) {
     $feedid = $feedsprefix . strtolower(implode($camelarray[0]));
     $lastterm = array_pop($camelarray[0]);
+    // stash the last term in the request as an attribute
+    // $item['@response']['tag'][] = $lastterm;
     if (isset(_feeds_importer_digest()[$feedid]) && ($source = feeds_source($feedid))) {
       if ($source->importer->fetcher->hasSourceConfig()) {
         $class = get_class($source->importer->fetcher);
@@ -171,7 +173,7 @@ function qbxml_import( $bookid, $response ) {
       if (sizeof(module_implements(HOOK_QBXML_PREPROCESS)) > 0) {
         // Call all modules that implement the hook, and let them make changes to $responsenode.
         if (implode('', module_invoke_all(HOOK_QBXML_PREPROCESS, $request, $item))) {
-          qbxml_deleterequest( $bookid, $requestID );
+          _qbxml_request_delete( $bookid, $requestID );
           continue; // hook functions should only return something if they have claimed the data.
         }
       }

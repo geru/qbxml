@@ -17,8 +17,8 @@
  * QBXML provides a theme hook to generate requests, and a Feeds-based importer
  * to map returned results into Drupal data structures. The requests and
  * responses are collated and kept together using a bookID concept compatibly
- * with the Quickbooks Webconnector and the BC_entity modules. This way, any
- * number of connections and accounting datasets can be maintained separately.
+ * with the Quickbooks Webconnector and the BC modules. This way, any number of
+ * connections and accounting datasets can be maintained separately.
  *
  * QBXML maintains a queue of outgoing requests and sends them automatically
  * when an appropriate incoming request for requests is made. Requests are
@@ -36,10 +36,12 @@
  * defined by files name example.qbxml.tpl.php. The qbxml theme hook provides
  * theme suggestions based on a base code and a Mod, Add, or Query operation.
  *
- * QBXML provides several hooks to preprocess or process incoming QBXML responses. Additionally,
- * it provides a default Feeds-based importer to do this automatically. The default
- * importer looks for a Feeds importer named according to the incoming message content tags
- * and, if found, it will initiate the importer on the incoming data.
+ 
+ * QBXML provides several hooks to preprocess or process incoming QBXML
+ * responses. Additionally, it provides a default Feeds-based importer to do
+ * this automatically. The default importer looks for a Feeds importer named
+ * according to the incoming message content tags and, if found, it will
+ * initiate the importer on the incoming data.
  *
  * @}
  */

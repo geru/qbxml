@@ -97,7 +97,7 @@ function qbxml_admin_operations_form() {
     '#title' => t('Book machine ID'),
     '#type' => 'textfield',
     '#description' => t('This is a book that will receive the data.'),
-    '#default_value' => function_exists('_bc_entity_user_default_bookid') ? _bc_entity_user_default_bookid() : 0,
+    '#default_value' => function_exists('_bc_user_default_bookid') ? _bc_user_default_bookid() : 0,
     '#element_validate' => array('element_validate_integer_positive'),
   );
 
@@ -161,7 +161,7 @@ function qbxml_admin_operations_form() {
  */
 function qbxml_admin_operations_form_validate($form_id, &$form_state) {
   $bookid = $form_state['values']['bookid'];
-  if (!function_exists('_bc_entity_user_accesses_book') || !_bc_entity_user_accesses_book($bookid)) {
+  if (!function_exists('_bc_user_accesses_book') || !_bc_user_accesses_book($bookid)) {
     form_set_error('QBXML', t('You need access to bookID :bookid. See your site administrator.', array(':bookid' => $bookid)));
   }
 }
