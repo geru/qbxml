@@ -35,7 +35,7 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
     $num = db_update( 'qbxml' )
       ->fields(array('state' => $state ))
       ->condition( 'rid', $rid )
-      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING), 'IN' ) // mark pending operations (sent, iterating, etc.) as state indicated
+//      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING), 'IN' ) // mark pending operations (sent, iterating, etc.) as state indicated
       ->execute();
   }
   else {
@@ -48,28 +48,46 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
   return $num;
 }
 
-/*
-* Implements hook_qbwc_sendRequestXML()
-*/
+/**
+ * Implements hook_qbwc_sendRequestXML()
+ * @param $bookid
+ * @param $sendRequestXML
+ * @param $company
+ * @return null|string return value is the request to be sent: contents of pre-prepared file
+ */
 function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
   $ret = NULL;
-
-  $files = _qbxml_filename($bookid, '(\pN+)', 'q');
-  $matchpattern = '/' . basename($files) . '/';
-  $outfiles = file_scan_directory(dirname($files), $matchpattern);
-  foreach ($outfiles as $absolute => $filename) {
-    if (file_exists($absolute)) {
-      $handle = fopen($absolute, "r");
-      $ret = fread($handle, filesize($absolute));
-      fclose($handle);
-      file_unmanaged_delete($absolute);
-      preg_match($matchpattern, $filename->filename, $matches);
-      _qbxml_request_sendtime_set_init($matches[1]);
-      _qbxml_request_set_state($matches[1], QBXML_STATE_SENT);
-      break;
+  $query = db_select( 'qbxml', 'q' )
+    ->fields( 'q' )
+    ->condition( 'bookid', $bookid )
+    ->condition( 'state', array(QBXML_STATE_ITERATING, QBXML_STATE_QUEUED), 'IN')
+    ->orderBy( 'q.rid', 'ASC' )
+    ->execute();
+  while( $query->rowCount() ) {
+    $result = $query->fetchAssoc();
+    $filename = _qbxml_filename( $bookid, $result['rid'], 'q' );
+    if( !file_exists($filename) ) {
+      _qbxml_request_set_state( $result['rid'], QBXML_STATE_ERROR );
+      watchdog('QBXML', t('Request file not found for Request[:rid]',array(':rid' => $result['rid'])));
+      continue;
     }
+    $handle = fopen($filename, "r");
+    $ret = fread($handle, filesize($filename));
+    fclose($handle);
+    file_unmanaged_delete($filename);
+    _qbxml_request_sendtime_set_init($result['rid']);
+    _qbxml_request_set_state($result['rid'], QBXML_STATE_SENT);
+    break;
   }
+
   return $ret;
+}
+
+/*
+ * convert an incoming term into a mapped term
+ */
+function qbxml_importtermmapper( $term ) {
+  return( strtolower($term) );
 }
 
 /*
@@ -83,12 +101,13 @@ function qbxml_feeds_import( &$request, $item ){
   $requestID = isset($request['@response']['RequestID']) ? $request['@response']['RequestID'] : 1;
   $responsekey = isset($request['@response']['ResponseKey']) ? $request['@response']['ResponseKey'] : '';
 
+  $importtermmapper = (isset($request['@request']['callback']['importtermmapper']) && function_exists($request['@request']['callback']['importtermmapper']))
+    ? $request['@request']['callback']['importtermmapper'] : 'qbxml_importtermmapper';
   $feedsprefix = isset( $request['@request']['callback']['feedsprefix'] ) ? $request['@request']['callback']['feedsprefix'] : QBXML_FEEDS_PREFIX;
-  $camelarray = array();
-  preg_match_all( '/[A-Z][a-z]+/', $responsekey, $camelarray );
-  while( $camelarray[0] ) {
-    $feedid = $feedsprefix . strtolower(implode($camelarray[0]));
-    $lastterm = array_pop($camelarray[0]);
+  $camelarray = qbxml_camelterm_to_array( $responsekey );
+  while( $camelarray ) {
+    $feedid = $feedsprefix . $importtermmapper(implode($camelarray));
+    $lastterm = array_pop($camelarray);
     // stash the last term in the request as an attribute
     // $item['@response']['tag'][] = $lastterm;
     if (isset(_feeds_importer_digest()[$feedid]) && ($source = feeds_source($feedid))) {
@@ -98,7 +117,7 @@ function qbxml_feeds_import( &$request, $item ){
           $sourceconfig = $source->getConfig();
           $importerconfig = $source->importer->getConfig();
           $filename = _qbxml_filename($bookid, $requestID, 's');
-          file_unmanaged_save_data($item->asXML(), $filename);
+          file_unmanaged_save_data($item->asXML(), $filename, FILE_EXISTS_REPLACE);
           $sourceconfig['FeedsFileFetcher']['source'] = $filename;
 
           // $source->importer->addConfig( array( 'process_in_background' => FALSE ) ); // let it keep setting from .inc file
@@ -163,7 +182,7 @@ function qbxml_import( $bookid, $response ) {
             )
           );
           $xmlstr = _qbxml_array_to_xml($newrequest, 'QBXML');
-          file_unmanaged_save_data( $xmlstr, _qbxml_filename( $bookid, $requestID, 'q' ) );
+          file_unmanaged_save_data( $xmlstr, _qbxml_filename( $bookid, $requestID, 'q' ), FILE_EXISTS_REPLACE );
           $deleterequest = FALSE;
           _qbxml_request_set_state( $requestID, QBXML_STATE_ITERATING );
         }
@@ -192,7 +211,7 @@ function qbxml_import( $bookid, $response ) {
 
       $filename = _qbxml_filename( $bookid, $requestID, 's' );
       $request['#response']['bookid'] = $bookid;
-      file_unmanaged_save_data($item->asXML(), $filename);
+      file_unmanaged_save_data($item->asXML(), $filename, FILE_EXISTS_REPLACE);
       // send to hook that does generic processing
       if (sizeof(module_implements(HOOK_QBXML_FILEPROCESS)) > 0) {
         // Call all modules that implement the hook, and let them deal with the file
@@ -209,7 +228,8 @@ function qbxml_import( $bookid, $response ) {
     }
   }
   $recsleft = db_select( 'qbxml', 'q' )
-    ->condition( 'q.gid', $groupowner)
+    ->condition( 'q.bookid', $bookid )
+    ->condition( 'q.state', array( QBXML_STATE_QUEUED, QBXML_STATE_ITERATING ), 'IN' )
     ->fields( 'q' )
     ->execute()
     ->rowCount();

@@ -152,6 +152,11 @@ function qbxml_admin_operations_form() {
     '#type' => 'submit',
     '#value' => t('Send request to Quickbooks')
   );
+  
+  $form[QBXML_FORM_REQUEST_PREFIX . 'callback_importtermmapper'] = array(
+    '#type' => 'textfield',
+    '#access' => FALSE,
+    '#value' => 'bc_importtermmapper' );
 
   return $form;
 }

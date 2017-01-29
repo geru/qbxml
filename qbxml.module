@@ -310,7 +310,6 @@ function _qbxml_array_to_xml(&$array, $parentkey = NULL, $attributes = '') {
       $output .= $prefix . $buildup . $raw . $postfix;
     }
   }
-
   return $output;
 }
 
@@ -399,18 +398,19 @@ function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
   foreach ($qbxmlmsgsrq as $requestkey => &$request) { // possible, to have multiple QBXMLMSGSRq grouped in one request
     if (!($requestkey[0] == '@')) {
       // put into database
-      $request['@request'] = array(
-        'groupID' => $groupID,
-        'callback' => isset($requestset['@request']['callback']) ? $requestset['@request']['callback'] : array(
+      $request['@request']['groupID'] = $groupID;
+      if( !isset($request['@request']['callback']) ) {
+        $request['@request']['callback'] = array(
           'importer' => QBXML_DEFAULT_IMPORTER,
           'feedsprefix' => QBXML_FEEDS_PREFIX
-        ),
-        'parent' => array(
+        );
+      }
+      $request['@request']['parent'] = array(
           'key' => $qbxmlmsgsrq['@key'],
           'attributes' => isset($qbxmlmsgsrq['@attributes']) ? $qbxmlmsgsrq['@attributes'] : array(),
-        ),
-        'key' => $requestkey,
-      );
+        );
+      $request['@request']['key'] = $requestkey;
+      
       $requestID = _qbxml_request_stash($bookid, $request['@request']['groupID'], array('request' => &$request));
       $request['@attributes']['requestID'] = $requestID;
       if (!$groupID) {
@@ -420,6 +420,14 @@ function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
   }
   $qbxmlmsgsrq = array('QBXMLMsgsRq' => $qbxmlmsgsrq);
   $xmlstr = _qbxml_array_to_xml($qbxmlmsgsrq, 'QBXML');
-  file_unmanaged_save_data($xmlstr, _qbxml_filename($bookid, $groupID, 'q'));
+  file_unmanaged_save_data($xmlstr, _qbxml_filename($bookid, $groupID, 'q'), FILE_EXISTS_REPLACE);
 }
 
+/*
+ * Convert a camelcase term into an array
+ */
+function qbxml_camelterm_to_array( $camelterm ) {
+  $camelarray = array();
+  $ret = preg_match_all( '/[A-Z][a-z]+/', $camelterm, $camelarray ); 
+  return( $ret == FALSE ? array() : $camelarray[0] );
+}
