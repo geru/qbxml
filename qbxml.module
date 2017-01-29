@@ -316,7 +316,7 @@ function _qbxml_array_to_xml(&$array, $parentkey = NULL, $attributes = '') {
 /*
  * generate arbitrarily deep nested array element
  */
-function _qbxml_set_deep_array_element(&$ret, array &$keys, $value) {
+function qbxml_set_deep_array_element(&$ret, array &$keys, $value) {
   $key = array_shift($keys);
   if (!count($keys)) {
     $ret[$key] = $value;
@@ -325,7 +325,7 @@ function _qbxml_set_deep_array_element(&$ret, array &$keys, $value) {
   if (!isset($ret[$key])) {
     $ret[$key] = array();
   }
-  _qbxml_set_deep_array_element($ret[$key], $keys, $value);
+  qbxml_set_deep_array_element($ret[$key], $keys, $value);
 }
 
 /*
@@ -358,7 +358,7 @@ function qbxml_form_generate_request_metadata(&$variables) {
   // generate callback information from form
   foreach (preg_grep('/^' . QBXML_FORM_REQUEST_PREFIX . '/', array_keys($variables)) as $callbackinfo) {
     $info = explode('_', substr($callbackinfo, strlen(QBXML_FORM_REQUEST_PREFIX)));
-    _qbxml_set_deep_array_element($requestinfo, $info, $variables[$callbackinfo]);
+    qbxml_set_deep_array_element($requestinfo, $info, $variables[$callbackinfo]);
   }
   return $requestinfo;
 }
@@ -370,23 +370,21 @@ function qbxml_form_generate_request_metadata(&$variables) {
 function qbxml_form_generate_request(&$variables, $base, $opcode) {
   $requestcmd = $base . $opcode . 'Rq';
   $ret = array(
-    $requestcmd => array(
-      '@request' => qbxml_form_generate_request_metadata($variables),
-      '@key' => $requestcmd,
-    )
-  );
-  $ret[$requestcmd] += qbxml_form_generate_qbxml($variables, $base, $opcode);
-  return ($ret);
+           $requestcmd => array(
+             '@request' => qbxml_form_generate_request_metadata($variables),
+             '@key' => $requestcmd,
+             ),
+         );
+  $ret[$requestcmd] = array_merge($ret[$requestcmd], qbxml_form_generate_qbxml($variables, $base, $opcode));
+  return $ret;
 }
 
 /*
  * Generate QBXMLMsgsRq from set of requests
  */
 function qbxml_generate_qbxmlmsgsrq(array &$requests, $attributes = array('onError' => 'continueOnError')) {
-  return array(
-    '@attributes' => $attributes,
-    '@key' => 'QBXMLMsgsRq',
-  ) + $requests;
+  return array_merge( array( '@attributes' => $attributes,
+                             '@key' => 'QBXMLMsgsRq' ), $requests );
 }
 
 /*
@@ -395,24 +393,33 @@ function qbxml_generate_qbxmlmsgsrq(array &$requests, $attributes = array('onErr
  */
 function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
   $groupID = 0;
-  foreach ($qbxmlmsgsrq as $requestkey => &$request) { // possible, to have multiple QBXMLMSGSRq grouped in one request
-    if (!($requestkey[0] == '@')) {
+  foreach ($qbxmlmsgsrq as $requestkey => &$request) {
+    if ( $requestkey[0] != '@' ) {
       // put into database
-      $request['@request']['groupID'] = $groupID;
-      if( !isset($request['@request']['callback']) ) {
-        $request['@request']['callback'] = array(
+      $actualrequest = &$request;
+      $actualkey = $requestkey;
+      if( is_int($requestkey) ) { // array of possibly same tags
+        foreach( $request as $key => &$req ) {
+          $actualkey = $key;
+          $actualrequest = &$req;
+        }
+      }
+      $actualrequest['@request']['groupID'] = $groupID;
+      if( !isset($actualrequest['@request']['callback']) ) {
+        $actualrequest['@request']['callback'] = array(
           'importer' => QBXML_DEFAULT_IMPORTER,
-          'feedsprefix' => QBXML_FEEDS_PREFIX
+          'feedsprefix' => QBXML_FEEDS_PREFIX,
+          'importtermmapper' => 'bc_importtermmapper'
         );
       }
-      $request['@request']['parent'] = array(
+      $actualrequest['@request']['parent'] = array(
           'key' => $qbxmlmsgsrq['@key'],
           'attributes' => isset($qbxmlmsgsrq['@attributes']) ? $qbxmlmsgsrq['@attributes'] : array(),
         );
-      $request['@request']['key'] = $requestkey;
+      $actualrequest['@request']['key'] = $actualkey;
       
-      $requestID = _qbxml_request_stash($bookid, $request['@request']['groupID'], array('request' => &$request));
-      $request['@attributes']['requestID'] = $requestID;
+      $requestID = _qbxml_request_stash($bookid, $actualrequest['@request']['groupID'], array('request' => &$actualrequest));
+      $actualrequest['@attributes']['requestID'] = $requestID;
       if (!$groupID) {
         $groupID = $requestID;
       }

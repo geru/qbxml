@@ -3,7 +3,7 @@
 
 /*
  * Set the initial send-time for a request
- */
+
 function _qbxml_request_sendtime_set_init( $rid ) {
   db_update( 'qbxml' ) // the very first time, the gid of the request is not set, so it gets updated
     ->fields(array('gid' => $rid ))
@@ -15,7 +15,7 @@ function _qbxml_request_sendtime_set_init( $rid ) {
     ->execute();
   return $num;
 }
-
+*/
 /*
  * Update the send-time for a request
  */
@@ -30,7 +30,7 @@ function _qbxml_request_sendtime_update( $rid ) {
 /*
  * Set the state of a request
  */
-function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
+function _qbxml_request_set_state( $rid, $state, $bookid=0, $ticket=NULL ) {
   if( !$bookid ) {
     $num = db_update( 'qbxml' )
       ->fields(array('state' => $state ))
@@ -39,10 +39,11 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
       ->execute();
   }
   else {
-    $num = db_update( 'qbxml' ) // update by bookid only for sent ones, this is for setting error state
-      ->fields(array('state' => $state ))
+    $num = db_update( 'qbxml' ) // update by bookid and ticket this is for setting error state when connection is closed unexpectedly
+      ->fields(array('state' => $state, 'ticket'=>'' ))
       ->condition( 'bookid', $bookid )
-      ->condition( 'state', QBXML_STATE_SENT )
+      ->condition( 'ticket', $ticket )
+      ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING ), 'IN' ) // ignore requests that are queued or already done, but unprocessed, or marked as error
       ->execute();
   }
   return $num;
@@ -57,12 +58,23 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0 ) {
  */
 function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
   $ret = NULL;
-  $query = db_select( 'qbxml', 'q' )
+  $query = db_select( 'qbxml', 'q' ) // look for requests currently pending for this ticket
     ->fields( 'q' )
     ->condition( 'bookid', $bookid )
-    ->condition( 'state', array(QBXML_STATE_ITERATING, QBXML_STATE_QUEUED), 'IN')
+    ->condition( 'state', array(QBXML_STATE_ITERATING, QBXML_STATE_QUEUED, QBXML_STATE_REQUEUE), 'IN')
+    ->condition( 'ticket', array($sendRequestXML->ticket) )
     ->orderBy( 'q.rid', 'ASC' )
     ->execute();
+  if( !$recs = $query->rowCount() ){ // if none found, look for any available requests for the bookid
+    $query = db_select( 'qbxml', 'q' )
+      ->fields( 'q' )
+      ->condition( 'bookid', $bookid )
+      ->condition( 'state', array(QBXML_STATE_ITERATING, QBXML_STATE_QUEUED, QBXML_STATE_REQUEUE), 'IN')
+      ->condition( 'ticket', NULL, 'IS NULL' )
+      ->orderBy( 'q.rid', 'ASC' )
+      ->execute();
+  }
+  $recs = $query->rowCount();
   while( $query->rowCount() ) {
     $result = $query->fetchAssoc();
     $filename = _qbxml_filename( $bookid, $result['rid'], 'q' );
@@ -75,8 +87,29 @@ function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
     $ret = fread($handle, filesize($filename));
     fclose($handle);
     file_unmanaged_delete($filename);
-    _qbxml_request_sendtime_set_init($result['rid']);
-    _qbxml_request_set_state($result['rid'], QBXML_STATE_SENT);
+    if( !$result['gid'] ) { // owner of group and all requests getting sent
+      db_update( 'qbxml' ) // the very first time, the gid of the parent request is not set. Update all children requests in one fell swoop
+      ->fields( array('state' => QBXML_STATE_SENT,
+                      'sent' => REQUEST_TIME,
+                      'ticket' => $sendRequestXML->ticket ))
+        ->condition( 'gid', $result['rid'] )
+        ->execute();
+      db_update( 'qbxml' ) // now, update the gid and everything else of the parent request
+      ->fields( array('state' => QBXML_STATE_SENT,
+        'sent' => REQUEST_TIME,
+        'ticket' => $sendRequestXML->ticket,
+        'gid' => $result['rid'] ))
+        ->condition( 'rid', $result['rid'] )
+        ->execute();
+    }
+    else { // update the status of a request
+      db_update( 'qbxml' )
+        ->fields( array('state' => QBXML_STATE_SENT,
+          'sent' => REQUEST_TIME,
+          'ticket' => $sendRequestXML->ticket ))
+        ->condition( 'rid', $result['rid'] )
+        ->execute();
+    }
     break;
   }
 
@@ -117,7 +150,7 @@ function qbxml_feeds_import( &$request, $item ){
           $sourceconfig = $source->getConfig();
           $importerconfig = $source->importer->getConfig();
           $filename = _qbxml_filename($bookid, $requestID, 's');
-          file_unmanaged_save_data($item->asXML(), $filename, FILE_EXISTS_REPLACE);
+          $filename = file_unmanaged_save_data($item->asXML(), $filename);
           $sourceconfig['FeedsFileFetcher']['source'] = $filename;
 
           // $source->importer->addConfig( array( 'process_in_background' => FALSE ) ); // let it keep setting from .inc file
@@ -146,7 +179,7 @@ function qbxml_feeds_import( &$request, $item ){
 function qbxml_import( $bookid, $response ) {
   $groupowner = NULL;
   $deleterequest = TRUE;
-  if( $qbxml_info = simplexml_load_string($response) ) { // use PHP builtin extension libxml
+  if( $qbxml_info = simplexml_load_string($response->response) ) { // use PHP builtin extension libxml
 
     foreach ($qbxml_info->QBXMLMsgsRs->children() as $key => $item) {
 
@@ -211,30 +244,43 @@ function qbxml_import( $bookid, $response ) {
 
       $filename = _qbxml_filename( $bookid, $requestID, 's' );
       $request['#response']['bookid'] = $bookid;
-      file_unmanaged_save_data($item->asXML(), $filename, FILE_EXISTS_REPLACE);
-      // send to hook that does generic processing
-      if (sizeof(module_implements(HOOK_QBXML_FILEPROCESS)) > 0) {
-        // Call all modules that implement the hook, and let them deal with the file
-        if (implode('', module_invoke_all(HOOK_QBXML_FILEPROCESS, $filename)) ) {
-          if( $deleterequest ) {
-            _qbxml_request_delete( $bookid, $requestID );
+      if( $filename = file_unmanaged_save_data($item->asXML(), $filename) ) {
+        // send to hook that does generic processing
+        if (sizeof(module_implements(HOOK_QBXML_FILEPROCESS)) > 0) {
+          // Call all modules that implement the hook, and let them deal with the file
+          if (implode('', module_invoke_all(HOOK_QBXML_FILEPROCESS, $filename))) {
+            if ($deleterequest) {
+              _qbxml_request_delete($bookid, $requestID);
+            }
+            file_unmanaged_delete($filename);
+            continue;
           }
-          file_unmanaged_delete($filename);
-          continue;
         }
       }
       // mark as response received but not processed
-      _qbxml_request_set_state( $requestID, QBXML_STATE_UNPROCESSED );
+      if( $deleterequest ) { // keep request and mark as unprocessed
+        _qbxml_request_set_state($requestID, QBXML_STATE_UNPROCESSED);
+      }
     }
   }
-  $recsleft = db_select( 'qbxml', 'q' )
+  if( !($recspending = db_select( 'qbxml', 'q' )
     ->condition( 'q.bookid', $bookid )
-    ->condition( 'q.state', array( QBXML_STATE_QUEUED, QBXML_STATE_ITERATING ), 'IN' )
+    ->condition( 'q.ticket', $response->ticket )
+    ->condition( 'q.state', array( QBXML_STATE_QUEUED, QBXML_STATE_REQUEUE, QBXML_STATE_ITERATING, QBXML_STATE_SENT ), 'IN' )
     ->fields( 'q' )
     ->execute()
-    ->rowCount();
-  $percentdone = (int) 100 / ($recsleft + 1);
-  return (int) $percentdone ? (int) $percentdone : (int) 1;
+    ->rowCount() ) ) {
+    $recspending = db_select( 'qbxml', 'q' )
+      ->condition( 'q.bookid', $bookid )
+      ->condition( 'q.ticket', NULL, 'IS NULL' )
+      ->condition( 'q.state', array( QBXML_STATE_QUEUED, QBXML_STATE_REQUEUE, QBXML_STATE_ITERATING, QBXML_STATE_SENT ), 'IN' )
+      ->fields( 'q' )
+      ->execute()
+      ->rowCount();
+  }
+  $percentdone = (int) (100 / ($recspending + 1));
+  $percentdone = $percentdone == 100 ? 99 : $percentdone; // prevent false 100 from rounding
+  return (int) ($recspending ? $percentdone : 100);
 }
 
 /*
@@ -250,12 +296,10 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
     if ($response->hresult) {
       // error has happened and is described in hresult and message
       watchdog('QBXML', "Quickbooks error Book#$bookid\n" . print_r($response, true));
-      // find open requests for bookid, mark as incomplete and set flag for admin to re-queue individually
       // @todo: set event or flag for admin
-      _qbxml_request_set_state( 0, QBXML_STATE_ERROR, $bookid );
     }
     else {
-      $ret = qbxml_import($bookid, $response->response);
+      $ret = qbxml_import($bookid, $response);
     }
   }
   return ($ret);
@@ -264,6 +308,7 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
 /*
  * Implements hook_qbwc_closeConnection()
  */
-function qbxml_qbwc_closeConnection( $bookid, $response ) {
-  _qbxml_request_set_state(0, QBXML_STATE_ERROR, $bookid); // request stays in database and is marked as error
+function qbxml_qbwc_closeConnection( $bookid, $closeConnection ) {
+  // pending requests are set to get requeued
+  _qbxml_request_set_state(0, QBXML_STATE_REQUEUE, $bookid, $closeConnection->ticket); // pending requests get marked to be requeued
 }

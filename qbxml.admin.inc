@@ -177,15 +177,16 @@ function qbxml_admin_operations_form_validate($form_id, &$form_state) {
 function qbxml_admin_operations_form_submit($form_id, &$form_state) {
   drupal_set_message(t('The operation has been submitted.'));
 
-  $requests = array();
   // create array to be rendered by format_xml_elements
-  // multiple QBXMLMmsgsRq elements are allowed. We are assuming just a single one, but the Rule expects one or more in an array
+  // multiple QBXMLMmsgsRq elements are allowed. However, be careful about submitting more than one.
+  // Quickbooks runs out of memory.
   foreach ($form_state['values'][QBXML_FORM_REQUEST_BASE] as $listindex) {
+    $request = array();
 
     $qbcmd_base = $form_state['complete form'][QBXML_FORM_REQUEST_BASE]['#options'][$listindex];
     $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
-    $requests += qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
-  }
+    $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
 
-  qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($requests));
+    qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($request));
+  }
 }

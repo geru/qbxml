@@ -36,6 +36,7 @@ define('HOOK_QBXML_IMPORTERS', 'qbxml_importers');
 
 // States of requests
 define('QBXML_STATE_QUEUED', 'q');
+define('QBXML_STATE_REQUEUE', 'r');
 define('QBXML_STATE_SENT', 's');
 define('QBXML_STATE_ITERATING', 'i');
 define('QBXML_STATE_UNPROCESSED', 'u');

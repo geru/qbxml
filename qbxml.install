@@ -25,25 +25,36 @@ function qbxml_schema() {
       'gid' => array(
         'description' => 'owner / first rid of group',
         'type' => 'int',
+        'default' => 0,
       ),
       'bookid' => array(
         'description' => 'book machine id',
         'type' => 'int',
+        'default' => 0,
       ),
       'created' => array(
         'description' => 'The Unix timestamp when this request was created.',
         'type' => 'int',
         'not null' => FALSE,
+        'default' => 0,
       ),
       'sent' => array(
         'description' => 'The Unix timestamp when this request was created.',
         'type' => 'int',
         'not null' => FALSE,
+        'default' => 0,
       ),
       'state' => array(
         'description' => 'State of request',
         'type' => 'varchar', // states are one-letter codes defined in qbxml.inc
         'length' => 1,
+        'default' => QBXML_STATE_QUEUED,
+      ),
+      'ticket' => array(
+        'description' => 'existing ticket -- ssh-encoded session ID',
+        'type' => 'varchar',
+        'length' => 36,
+        'default' => NULL,
       ),
       'data' => array(
         'description' => 'Requests and other information get stashed in JSON-encoded array',
