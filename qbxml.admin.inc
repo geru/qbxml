@@ -32,50 +32,145 @@ function qbxml_admin_operations_form() {
 
   $form = array();
 
-  // Build list of QB lists
   $qb_list = array(
-    "Account",
-    "Class",
-    "Customer",
-    "CustomerMsg",
-    "CustomerType",
-    "DateDrivenTerms",
-    "Employee",
-    "ItemDiscount",
-    "ItemFixedAsset",
-    "ItemGroup",
-    "ItemInventory",
-    "ItemInventoryAssembly",
-    "ItemNonInventory",
-    "ItemOtherCharge",
-    "ItemPayment",
-    "ItemSalesTax",
-    "ItemSalesTaxGroup",
-    "ItemService",
-    "ItemSubtotal",
-    "JobType",
-    "OtherName",
-    "PaymentMethod",
-    "PriceLevel",
-    "SalesRep",
-    "SalesTaxCode",
-    "ShipMethod",
-    "StandardTerms",
-    "ToDo",
-    "Vendor",
-    "VendorType",
+    "Party" => array(
+      "Customer",
+      "Employee",
+      "OtherName",
+      "Vendor",
+      "Entity",
+    ),
+    "Accounts" => array(
+      "Account",
+    ),
+    "Item" => array(
+      "ItemService",
+      "ItemNonInventory",
+      "ItemOtherCharge",
+      "ItemInventory",
+      "ItemInventoryAssembly",
+      "ItemFixedAsset",
+      "ItemSubtotal",
+      "ItemDiscount",
+      "ItemPayment",
+      "ItemSalesTax",
+      "ItemSalesTaxGroup",
+      "ItemGroup",
+      "Item",
+    ),
+    "List" => array(
+      "Class",
+      "CustomerMsg",
+      "CustomerType",
+      "StandardTerms",
+      "DateDrivenTerms",
+      "Terms",
+      "VendorType",
+      "JobType",
+      "PaymentMethod",
+      "ShipMethod",
+      "SalesTaxCode",
+      "PriceLevel",
+      "BillingRate",
+    ),
+    "Data set" => array(
+      "SalesRep",
+      "ToDo",
+    ),
+    "Company" => array(
+      "Host",
+      "Company",
+      "CompanyActivity",
+      "Preferences",
+      "Template",
+      "Currency",
+      "InventorySite",
+      "DataExtDef",
+    ),
+    "Other" => array(
+      "AccountTaxLineInfo",
+      "Lead",
+      "Vehicle",
+      "UnitOfMeasureSet",
+      "ItemSites",
+      "BarCode",
+    ),
+    "Tally" => array(
+      "SalesTaxReturn",
+      "SalesTaxReturnLine",
+      "Invoice",
+      "Estimate",
+      "SalesOrder",
+      "SalesReceipt",
+      "CreditMemo",
+      "PurchaseOrder",
+      "Bill",
+      "ItemReceipt",
+      "VendorCredit",
+      "BillToPay",
+      "SalesTaxPayable",
+      "BuildAssembly",
+      "ItemAssembliesCanBuild",
+      "VehicleMileage",
+      "TransferInventory",
+      "InventoryAdjustment",
+    ),
+    "Employee" => array(
+      "PayrollItemWage",
+      "PayrollItemNonWage",
+      "WorkersCompCode",
+      "Form1099CategoryAccountMapping",
+      "PayrollLastPeriod",
+      "TimeTracking",
+    ),
+    "Transaction" => array(
+      "ReceivePayment",
+      "ReceivePaymentToDeposit",
+      "Charge",
+      "BillPaymentCheck",
+      "BillPaymentCreditCard",
+      "SalesTaxPaymentCheck",
+      "Check",
+      "CreditCardCharge",
+      "CreditCardCredit",
+      "JournalEntry",
+      "Deposit",
+      "Transaction",
+      "ARRefundCreditCard",
+      "Transfer",
+    ),
+    "Report" => array(
+      "GeneralSummaryReport",
+      "JobReport",
+      "TimeReport",
+      "AgingReport",
+      "BudgetSummaryReport",
+      "GeneralDetailReport",
+      "CustomDetailReport",
+      "CustomSummaryReport",
+      "PayrollDetailReport",
+      "PayrollSummaryReport",
+    ),
+/*    "Sync" => array(
+      "ListDeleted",
+      "TxnDeleted",
+      "DataEventRecoveryInfo",
+    ), 
+*/
   );
 
-  $form[QBXML_FORM_REQUEST_BASE] = array(
-    '#title' => t('Quickbooks list'),
-    '#type' => 'select',
-    '#options' => $qb_list,
-    '#description' => t('Select list(s) to import.'),
-    '#size' => 15,
-    '#multiple' => TRUE,
-    '#required' => TRUE,
-    '#attributes' => array('class' => array('views-exposed-widget', 'left')),
-  );
+  foreach( $qb_list as $list => $listoptions ) {
+    $form[QBXML_FORM_REQUEST_BASE . $list] = array(
+      '#title' => t($list),
+      '#type' => 'select',
+      '#options' => $listoptions,
+      '#description' => t('Select list(s) to import.'),
+      '#size' => count($listoptions),
+      '#multiple' => TRUE,
+      '#required' => FALSE,
+      '#attributes' => array('class' => array('views-exposed-widget', 'left')),
+    );
+  }
 
   $form[QBXML_FORM_REQUEST_OPCODE] = array(
     '#title' => t('Operation'),
@@ -97,7 +192,7 @@ function qbxml_admin_operations_form() {
     '#title' => t('Book machine ID'),
     '#type' => 'textfield',
     '#description' => t('This is a book that will receive the data.'),
-    '#default_value' => function_exists('_bc_user_default_bookid') ? _bc_user_default_bookid() : 0,
+    '#default_value' => function_exists('_bc_user_default_bookid') ? _bc_user_default_bookid() : 1,
     '#element_validate' => array('element_validate_integer_positive'),
   );
 
@@ -166,7 +261,7 @@ function qbxml_admin_operations_form() {
  */
 function qbxml_admin_operations_form_validate($form_id, &$form_state) {
   $bookid = $form_state['values']['bookid'];
-  if (!function_exists('_bc_user_accesses_book') || !_bc_user_accesses_book($bookid)) {
+  if (function_exists('_bc_user_accesses_book') && !_bc_user_accesses_book($bookid)) {
     form_set_error('QBXML', t('You need access to bookID :bookid. See your site administrator.', array(':bookid' => $bookid)));
   }
 }
@@ -180,13 +275,15 @@ function qbxml_admin_operations_form_submit($form_id, &$form_state) {
   // create array to be rendered by format_xml_elements
   // multiple QBXMLMmsgsRq elements are allowed. However, be careful about submitting more than one.
   // Quickbooks runs out of memory.
-  foreach ($form_state['values'][QBXML_FORM_REQUEST_BASE] as $listindex) {
-    $request = array();
+  foreach( preg_grep('/^' . QBXML_FORM_REQUEST_BASE . '.*/', array_keys($form_state['values'])) as $listname ) {
+    foreach ($form_state['values'][$listname] as $listindex) {
+      $request = array();
 
-    $qbcmd_base = $form_state['complete form'][QBXML_FORM_REQUEST_BASE]['#options'][$listindex];
-    $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
-    $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
+      $qbcmd_base = $form_state['complete form'][$listname]['#options'][$listindex];
+      $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
+      $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
 
-    qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($request));
+      qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($request));
+    }
   }
 }

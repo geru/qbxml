@@ -242,7 +242,7 @@ function qbxml_import( $bookid, $response ) {
         continue;
       }
 
-      $filename = _qbxml_filename( $bookid, $requestID, 's' );
+      $filename = _qbxml_filename( $bookid, $requestID, 's-' . $key );
       $request['#response']['bookid'] = $bookid;
       if( $filename = file_unmanaged_save_data($item->asXML(), $filename) ) {
         // send to hook that does generic processing

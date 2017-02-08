@@ -134,64 +134,142 @@ function qbxml_theme($existing, $type, $theme, $path) {
  * in the qbxml.tpl.php files
  */
 function theme_qbxml($var) {
+
   $base = empty($var['qbxml_base']) ? '' : $var['qbxml_base'];
   $output = '';
+  $formatcode = array(
+      "Customer" => 0x7,
+      "Employee" => 0x6,
+      "OtherName" => 0x6,
+      "Vendor" => 0x7,
+      "Entity" => 0x7,
+
+      "Account" => 0x6,
+
+      "ItemService" => 0x7,
+      "ItemNonInventory" => 0x7,
+      "ItemOtherCharge" => 0x7,
+      "ItemInventory" => 0x7,
+      "ItemInventoryAssembly" => 0x7,
+      "ItemFixedAsset" => 0x7,
+      "ItemSubtotal" => 0x7,
+      "ItemDiscount" => 0x7,
+      "ItemPayment" => 0x7,
+      "ItemSalesTax" => 0x7,
+      "ItemSalesTaxGroup" => 0x7,
+      "ItemGroup" => 0x7,
+      "Item" => 0x7,
+
+      "Class" => 0x6,
+      "CustomerMsg" => 0x6,
+      "CustomerType" => 0x6,
+      "StandardTerms" => 0x6,
+      "DateDrivenTerms" => 0x6,
+      "Terms" => 0x6,
+      "VendorType" => 0x6,
+      "JobType" => 0x6,
+      "PaymentMethod" => 0x6,
+      "ShipMethod" => 0x6,
+      "SalesTaxCode" => 0x6,
+      "PriceLevel" => 0x6,
+      "BillingRate" => 0x4,
+
+      "SalesRep" => 0x7,
+      "ToDo" => 0x7,
+
+      "Host" => 0x2,
+      "Company" => 0x2,
+      "CompanyActivity" => 0x2,
+      "Preferences" => 0x2,
+      "Template" => 0x2,
+      "Currency" => 0x2,
+      "InventorySite" => 0x2,
+      "DataExtDef" => 0x2,
+
+      "AccountTaxLineInfo" => 0x2,
+      "Lead" => 0x2,
+      "Vehicle" => 0x2,
+      "UnitOfMeasureSet" => 0x2,
+      "ItemSites" => 0x2,
+      "BarCode" => 0x2,
+
+      "SalesTaxReturn" => 0x100,
+      "SalesTaxReturnLine" => 0x100,
+      "Invoice" => 0x100,
+      "Estimate" => 0x100,
+      "SalesOrder" => 0x100,
+      "SalesReceipt" => 0x100,
+      "CreditMemo" => 0x100,
+      "PurchaseOrder" => 0x100,
+      "Bill" => 0x100,
+      "ItemReceipt" => 0x100,
+      "VendorCredit" => 0x100,
+      "BillToPay" => 0x100,
+      "SalesTaxPayable" => 0x100,
+      "BuildAssembly" => 0x100,
+      "ItemAssembliesCanBuild" => 0x100,
+      "VehicleMileage" => 0x100,
+      "TransferInventory" => 0x100,
+      "InventoryAdjustment" => 0x100,
+
+      "PayrollItemWage" => 0x100,
+      "PayrollItemNonWage" => 0x100,
+      "WorkersCompCode" => 0x100,
+      "Form1099CategoryAccountMapping" => 0x100,
+      "PayrollLastPeriod" => 0x100,
+      "TimeTracking" => 0x100,
+
+      "ReceivePayment" => 0x100,
+      "ReceivePaymentToDeposit" => 0x100,
+      "Charge" => 0x100,
+      "BillPaymentCheck" => 0x100,
+      "BillPaymentCreditCard" => 0x100,
+      "SalesTaxPaymentCheck" => 0x100,
+      "Check" => 0x100,
+      "CreditCardCharge" => 0x100,
+      "CreditCardCredit" => 0x100,
+      "JournalEntry" => 0x100,
+      "Deposit" => 0x100,
+      "Transaction" => 0x100,
+      "ARRefundCreditCard" => 0x100,
+      "Transfer" => 0x100,
+
+      "GeneralSummaryReport" => 0x100,
+      "JobReport" => 0x100,
+      "TimeReport" => 0x100,
+      "AgingReport" => 0x100,
+      "BudgetSummaryReport" => 0x100,
+      "GeneralDetailReport" => 0x100,
+      "CustomDetailReport" => 0x100,
+      "CustomSummaryReport" => 0x100,
+      "PayrollDetailReport" => 0x100,
+      "PayrollSummaryReport" => 0x100,
+
+      "ListDeleted" => 0x100,
+      "TxnDeleted" => 0x100,
+      "DataEventRecoveryInfo" => 0x100,
+  );
+
   if (!empty($var['input']['maxreturned'])) {
-    if (in_array($base, array(
-      'Lead',
-      'Customer',
-      'Vendor',
-      'Entity',
-      'ItemService',
-      'ItemNonInventory',
-      'ItemOtherCharge',
-      'ItemInventory',
-      'ItemInventoryAssembly',
-      'ItemFixedAsset',
-      'ItemSubtotal',
-      'ItemDiscount',
-      'ItemPayment',
-      'ItemSalesTax',
-      'ItemSalesTaxGroup',
-      'ItemGroup',
-      'Item',
-      'Invoice',
-      'Estimate',
-      'SalesOrder',
-      'SalesReceipt',
-      'CreditMemo',
-      'ReceivePayment',
-      'Charge',
-      'PurchaseOrder',
-      'Bill',
-      'ItemReceipt',
-      'VendorCredit',
-      'BillPaymentCheck',
-      'BillPaymentCreditCard',
-      'SalesTaxPaymentCheck',
-      'InventoryAdjustment',
-      'TimeTracking',
-      'Check',
-      'CreditCardCharge',
-      'CreditCardCredit',
-      'JournalEntry',
-      'Deposit',
-      'Transaction',
-      'BuildAssembly',
-      'ARRefundCreditCard',
-      'VehicleMileage',
-      'TransferInventory',
-      'ItemSites',
-      'BarCode',
-      'Transfer',
-      ''
-    ))) {
+    if ($formatcode[$base] & 0x1 ) {
       $output .= '<MaxReturned>' . $var['input']['maxreturned'] . '</MaxReturned>';
     }
   }
-  if (isset($var['input']['activestatus'])) {
-    $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
+  if (!empty($var['input']['activestatus'])) {
+    if ($formatcode[$base] & 0x2 ) {
+     $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
+    }
   }
+
+  if( $formatcode[$base] & 0x4 ) {
+    if (!empty($var['input']['timedatefrom'])) {
+      $output .= '<FromModifiedDate>' . $var['input']['timedatefrom'] . '</FromModifiedDate>';
+    }
+    if (!empty($var['input']['timedateto'])) {
+      $output .= '<ToModifiedDate>' . $var['input']['timedateto'] . '</ToModifiedDate>';
+    }
+  }
+  
   return ($output);
 }
 
