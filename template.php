@@ -13,10 +13,12 @@ function qbxml_preprocess(&$var, $hook) {
     $var['theme_hook_suggestions'][] = $opcode . '.qbxml';
     $var['theme_hook_suggestions'][] = 'qbxml__' . $opcode;
   }
-  if (isset($var['qbxml_base'])) {
+  if (isset($var['qbxml_base']) ) {
     $base = strtolower($var['qbxml_base']);
-    $var['theme_hook_suggestions'][] = $base . '.qbxml';
-    $var['theme_hook_suggestions'][] = 'qbxml__' . $base;
+    if(  $opcode != 'query' ) {
+      $var['theme_hook_suggestions'][] = $base . '.qbxml';
+      $var['theme_hook_suggestions'][] = 'qbxml__' . $base;
+    }
     if ($opcode) {
       $var['theme_hook_suggestions'][] = $base . $opcode . '.qbxml';
       $var['theme_hook_suggestions'][] = 'qbxml__' . $base . $opcode;

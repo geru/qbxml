@@ -132,144 +132,190 @@ function qbxml_theme($existing, $type, $theme, $path) {
  * This is a quick-and-dirty theme that gets you up and rolling importing
  * QB data with a single click. Real theming will be implemented elsewhere
  * in the qbxml.tpl.php files
+ * $format code is a mask
+ *   0x0001 - iteration and MaxReturned
+ *   0x0002 - ActiveStatus
+ *   0x0004 - From and To ModifiedDate
+ *   0x0008 - MetaData
+ *   0x0010 - ListID
+ *   0x0020 - Name
+ *   0x0040 - NameRange
+ *   0x0080 -
+ *   0x0100 - IncludeRetElement
+ *   0x1000 - IncludeLineItems
+ *   0x2000 - IncludeLinkedTxns
  */
 function theme_qbxml($var) {
 
   $base = empty($var['qbxml_base']) ? '' : $var['qbxml_base'];
+  // for the moment, this is concentrating on query opcodes.
   $output = '';
   $formatcode = array(
-      "Customer" => 0x7,
-      "Employee" => 0x6,
-      "OtherName" => 0x6,
-      "Vendor" => 0x7,
-      "Entity" => 0x7,
+      "Customer" => array( 'mask' => 0x77 ),
+      "Employee" => array( 'mask' => 0x76 ),
+      "OtherName" => array( 'mask' => 0x76 ),
+      "Vendor" => array( 'mask' => 0x77 ),
+      // "Entity" => array( 'mask' => 0x77 ), this encompasses all of the Parties, so commented just because it is too easy to duplicate queries.
 
-      "Account" => 0x6,
+      "Account" => array( 'mask' => 0x76 ),
 
-      "ItemService" => 0x7,
-      "ItemNonInventory" => 0x7,
-      "ItemOtherCharge" => 0x7,
-      "ItemInventory" => 0x7,
-      "ItemInventoryAssembly" => 0x7,
-      "ItemFixedAsset" => 0x7,
-      "ItemSubtotal" => 0x7,
-      "ItemDiscount" => 0x7,
-      "ItemPayment" => 0x7,
-      "ItemSalesTax" => 0x7,
-      "ItemSalesTaxGroup" => 0x7,
-      "ItemGroup" => 0x7,
-      "Item" => 0x7,
+      "ItemService" => array( 'mask' => 0x77 ),
+      "ItemNonInventory" => array( 'mask' => 0x77 ),
+      "ItemOtherCharge" => array( 'mask' => 0x77 ),
+      "ItemInventory" => array( 'mask' => 0x77 ),
+      "ItemInventoryAssembly" => array( 'mask' => 0x77 ),
+      "ItemFixedAsset" => array( 'mask' => 0x77 ),
+      "ItemSubtotal" => array( 'mask' => 0x77 ),
+      "ItemDiscount" => array( 'mask' => 0x77 ),
+      "ItemPayment" => array( 'mask' => 0x77 ),
+      "ItemSalesTax" => array( 'mask' => 0x77 ),
+      "ItemSalesTaxGroup" => array( 'mask' => 0x77 ),
+      "ItemGroup" => array( 'mask' => 0x77 ),
+      // "Item" => array( 'mask' => 0x77 ), this encompasses all of the Items, so commented just because it is too easy to duplicate queries.
 
-      "Class" => 0x6,
-      "CustomerMsg" => 0x6,
-      "CustomerType" => 0x6,
-      "StandardTerms" => 0x6,
-      "DateDrivenTerms" => 0x6,
-      "Terms" => 0x6,
-      "VendorType" => 0x6,
-      "JobType" => 0x6,
-      "PaymentMethod" => 0x6,
-      "ShipMethod" => 0x6,
-      "SalesTaxCode" => 0x6,
-      "PriceLevel" => 0x6,
-      "BillingRate" => 0x4,
+      "Class" => array( 'mask' => 0x6 ),
+      "CustomerMsg" => array( 'mask' => 0x6 ),
+      "CustomerType" => array( 'mask' => 0x6 ),
+      "StandardTerms" => array( 'mask' => 0x6 ),
+      "DateDrivenTerms" => array( 'mask' => 0x6 ),
+      "Terms" => array( 'mask' => 0x6 ),
+      "VendorType" => array( 'mask' => 0x6 ),
+      "JobType" => array( 'mask' => 0x6 ),
+      "PaymentMethod" => array( 'mask' => 0x6 ),
+      "ShipMethod" => array( 'mask' => 0x6 ),
+      "SalesTaxCode" => array( 'mask' => 0x6 ),
+      "PriceLevel" => array( 'mask' => 0x6 ),
+      "BillingRate" => array( 'mask' => 0x4 ),
 
-      "SalesRep" => 0x7,
-      "ToDo" => 0x7,
+      "SalesRep" => array( 'mask' => 0xe ),
+      "ToDo" => array( 'mask' => 0xe ),
 
-      "Host" => 0x2,
-      "Company" => 0x2,
-      "CompanyActivity" => 0x2,
-      "Preferences" => 0x2,
-      "Template" => 0x2,
-      "Currency" => 0x2,
-      "InventorySite" => 0x2,
-      "DataExtDef" => 0x2,
+      "Host" => array( 'mask' => 0x0 ),
+      "Company" => array( 'mask' => 0x0 ),
+      "CompanyActivity" => array( 'mask' => 0x0 ),
+      "Preferences" => array( 'mask' => 0x0 ),
+      "Template" => array( 'mask' => 0x0 ),
+      "Currency" => array( 'mask' => 0x0 ),
+      "InventorySite" => array( 'mask' => 0x0 ),
+      "DataExtDef" => array( 'mask' => 0x0 ),
 
-      "AccountTaxLineInfo" => 0x2,
-      "Lead" => 0x2,
-      "Vehicle" => 0x2,
-      "UnitOfMeasureSet" => 0x2,
-      "ItemSites" => 0x2,
-      "BarCode" => 0x2,
+      "AccountTaxLineInfo" => array( 'mask' => 0x0 ),
+      "Lead" => array( 'mask' => 0x0 ),
+      "Vehicle" => array( 'mask' => 0x0 ),
+      "UnitOfMeasureSet" => array( 'mask' => 0x0 ),
+      "ItemSites" => array( 'mask' => 0x0 ),
+      "BarCode" => array( 'mask' => 0x0 ),
 
-      "SalesTaxReturn" => 0x100,
-      "SalesTaxReturnLine" => 0x100,
-      "Invoice" => 0x100,
-      "Estimate" => 0x100,
-      "SalesOrder" => 0x100,
-      "SalesReceipt" => 0x100,
-      "CreditMemo" => 0x100,
-      "PurchaseOrder" => 0x100,
-      "Bill" => 0x100,
-      "ItemReceipt" => 0x100,
-      "VendorCredit" => 0x100,
-      "BillToPay" => 0x100,
-      "SalesTaxPayable" => 0x100,
-      "BuildAssembly" => 0x100,
-      "ItemAssembliesCanBuild" => 0x100,
-      "VehicleMileage" => 0x100,
-      "TransferInventory" => 0x100,
-      "InventoryAdjustment" => 0x100,
+      "SalesTaxReturn" => array( 'mask' => 0x0000, ),
+      "SalesTaxReturnLine" => array( 'mask' => 0x3001, 'raw' => 'TaxAgencyVendorRef' ),
+      "Invoice" => array( 'mask' => 0x3001, ),
+      "Estimate" => array( 'mask' => 0x3001, ),
+      "SalesOrder" => array( 'mask' => 0x3001, ),
+      "SalesReceipt" => array( 'mask' => 0x3001, ),
+      "CreditMemo" => array( 'mask' => 0x3001, ),
+      "PurchaseOrder" => array( 'mask' => 0x3001, ),
+      "Bill" => array( 'mask' => 0x3001, ),
+      "ItemReceipt" => array( 'mask' => 0x3001, ),
+      "VendorCredit" => array( 'mask' => 0x3001, ),
+      "BillToPay" => array( 'mask' => 0x3001, ),
+      "SalesTaxPayable" => array( 'mask' => 0x3001, ),
+      "BuildAssembly" => array( 'mask' => 0x3001, ),
+      "ItemAssembliesCanBuild" => array( 'mask' => 0x3001, ),
+      "VehicleMileage" => array( 'mask' => 0x3001, ),
+      "TransferInventory" => array( 'mask' => 0x3001, ),
+      "InventoryAdjustment" => array( 'mask' => 0x3001, ),
 
-      "PayrollItemWage" => 0x100,
-      "PayrollItemNonWage" => 0x100,
-      "WorkersCompCode" => 0x100,
-      "Form1099CategoryAccountMapping" => 0x100,
-      "PayrollLastPeriod" => 0x100,
-      "TimeTracking" => 0x100,
+      "PayrollItemWage" => array( 'mask' => 0x3000, ),
+      "PayrollItemNonWage" => array( 'mask' => 0x3000, ),
+      "WorkersCompCode" => array( 'mask' => 0x3000, ),
+      "Form1099CategoryAccountMapping" => array( 'mask' => 0x3000, 'raw' => 'MappingCategory' ),
+      "PayrollLastPeriod" => array( 'mask' => 0x3000, ),
+      "TimeTracking" => array( 'mask' => 0x3000, ),
 
-      "ReceivePayment" => 0x100,
-      "ReceivePaymentToDeposit" => 0x100,
-      "Charge" => 0x100,
-      "BillPaymentCheck" => 0x100,
-      "BillPaymentCreditCard" => 0x100,
-      "SalesTaxPaymentCheck" => 0x100,
-      "Check" => 0x100,
-      "CreditCardCharge" => 0x100,
-      "CreditCardCredit" => 0x100,
-      "JournalEntry" => 0x100,
-      "Deposit" => 0x100,
-      "Transaction" => 0x100,
-      "ARRefundCreditCard" => 0x100,
-      "Transfer" => 0x100,
+      "ReceivePayment" => array( 'mask' => 0x1000, ),
+      "ReceivePaymentToDeposit" => array( 'mask' => 0x1000, ),
+      "Charge" => array( 'mask' => 0x1000, ),
+      "BillPaymentCheck" => array( 'mask' => 0x1000, ),
+      "BillPaymentCreditCard" => array( 'mask' => 0x1000, ),
+      "SalesTaxPaymentCheck" => array( 'mask' => 0x1000, ),
+      "Check" => array( 'mask' => 0x1000, ),
+      "CreditCardCharge" => array( 'mask' => 0x1000, ),
+      "CreditCardCredit" => array( 'mask' => 0x1000, ),
+      "JournalEntry" => array( 'mask' => 0x1000, ),
+      "Deposit" => array( 'mask' => 0x1000, ),
+      "Transaction" => array( 'mask' => 0x1000, ),
+      "ARRefundCreditCard" => array( 'mask' => 0x1000, ),
+      "Transfer" => array( 'mask' => 0x1000, ),
 
-      "GeneralSummaryReport" => 0x100,
-      "JobReport" => 0x100,
-      "TimeReport" => 0x100,
-      "AgingReport" => 0x100,
-      "BudgetSummaryReport" => 0x100,
-      "GeneralDetailReport" => 0x100,
-      "CustomDetailReport" => 0x100,
-      "CustomSummaryReport" => 0x100,
-      "PayrollDetailReport" => 0x100,
-      "PayrollSummaryReport" => 0x100,
+      "GeneralSummaryReport" => array( 'mask' => 0x1000, ),
+      "JobReport" => array( 'mask' => 0x1000, ),
+      "TimeReport" => array( 'mask' => 0x1000, ),
+      "AgingReport" => array( 'mask' => 0x1000, ),
+      "BudgetSummaryReport" => array( 'mask' => 0x1000, ),
+      "GeneralDetailReport" => array( 'mask' => 0x1000, ),
+      "CustomDetailReport" => array( 'mask' => 0x1000, ),
+      "CustomSummaryReport" => array( 'mask' => 0x1000, ),
+      "PayrollDetailReport" => array( 'mask' => 0x1000, ),
+      "PayrollSummaryReport" => array( 'mask' => 0x1000, ),
 
-      "ListDeleted" => 0x100,
-      "TxnDeleted" => 0x100,
-      "DataEventRecoveryInfo" => 0x100,
+      "ListDeleted" => array( 'mask' => 0x1000, ),
+      "TxnDeleted" => array( 'mask' => 0x1000, ),
+      "DataEventRecoveryInfo" => array( 'mask' => 0x1000, ),
   );
 
-  if (!empty($var['input']['maxreturned'])) {
-    if ($formatcode[$base] & 0x1 ) {
-      $output .= '<MaxReturned>' . $var['input']['maxreturned'] . '</MaxReturned>';
+  if (!empty($var['values']['maxreturned'])) {
+    if ($formatcode[$base]['mask'] & 0x001 ) {
+      $output .= '<MaxReturned>' . $var['values']['maxreturned'] . '</MaxReturned>';
     }
   }
-  if (!empty($var['input']['activestatus'])) {
-    if ($formatcode[$base] & 0x2 ) {
-     $output .= '<ActiveStatus>' . $var['input']['activestatus'] . '</ActiveStatus>';
+  if (!empty($var['values']['activestatus'])) {
+    if ($formatcode[$base]['mask'] & 0x002 ) {
+     $output .= '<ActiveStatus>' . $var['values']['activestatus'] . '</ActiveStatus>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x004 ) {
+    if (!empty($var['values']['from'])) {
+      $output .= '<FromModifiedDate>' . $var['values']['from'] . '</FromModifiedDate>';
+    }
+    if (!empty($var['values']['to'])) {
+      $output .= '<ToModifiedDate>' . $var['values']['to'] . '</ToModifiedDate>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x020 ) {
+    if (!empty($var['values']['name'])) {
+      $output .= '<Name>' . $var['values']['name'] . '</Name>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x040 ) {
+    if (!empty($var['values']['namerange'])) {
+      $output .= '<NameRange>' . $var['values']['namerange'] . '</NameRange>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x100 ) {
+    if (!empty($var['values']['includeretelement'])) {
+      $output .= '<IncludeRetElement>' . $var['values']['includeretelement'] . '</IncludeRetElement>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x1000 ) {
+    if (!empty($var['values']['includelineitems'])) {
+      $output .= '<IncludeLineItems>' . 'true' . '</IncludeLineItems>';
+    }
+  }
+  if( $formatcode[$base]['mask'] & 0x2000 ) {
+    if (!empty($var['values']['includelinkedtxns'])) {
+      $output .= '<IncludeLinkedTxns>' . 'true' . '</IncludeLinkedTxns>';
+    }
+  }
+  if( !empty($formatcode[$base]['raw']) ) {
+    if( !empty($var['values'][QBXML_FORM_RAWQUERY])) {
+      $output .= '<' . $formatcode[$base]['raw'] . '>' . $var['values'][QBXML_FORM_RAWQUERY] . '</' . $formatcode[$base]['raw'] . '>';
+      $var['values'][QBXML_FORM_RAWQUERY] = '';
     }
   }
 
-  if( $formatcode[$base] & 0x4 ) {
-    if (!empty($var['input']['timedatefrom'])) {
-      $output .= '<FromModifiedDate>' . $var['input']['timedatefrom'] . '</FromModifiedDate>';
-    }
-    if (!empty($var['input']['timedateto'])) {
-      $output .= '<ToModifiedDate>' . $var['input']['timedateto'] . '</ToModifiedDate>';
-    }
+  if( !empty($var['values'][QBXML_FORM_RAWQUERY])) {
+    $output .= $var['values'][QBXML_FORM_RAWQUERY];
   }
-  
   return ($output);
 }
 
@@ -384,7 +430,7 @@ function _qbxml_array_to_xml(&$array, $parentkey = NULL, $attributes = '') {
         }
       }
     } // will produce empty container if array is null
-    if ($buildup || $raw) {
+    if ($buildup || $raw || $key) {
       $output .= $prefix . $buildup . $raw . $postfix;
     }
   }
@@ -415,7 +461,7 @@ function qbxml_form_generate_qbxml(&$variables, $base, $opcode) {
   $vars = array(
     'qbxml_base' => $base,
     'qbxml_opcode' => $opcode,
-    'input' => $variables
+    'values' => $variables
   );
   $ret = array('@raw' => theme('qbxml', $vars));
   if (stristr($ret['@raw'], 'MaxReturned')) {
@@ -436,7 +482,9 @@ function qbxml_form_generate_request_metadata(&$variables) {
   // generate callback information from form
   foreach (preg_grep('/^' . QBXML_FORM_REQUEST_PREFIX . '/', array_keys($variables)) as $callbackinfo) {
     $info = explode('_', substr($callbackinfo, strlen(QBXML_FORM_REQUEST_PREFIX)));
-    qbxml_set_deep_array_element($requestinfo, $info, $variables[$callbackinfo]);
+    if( !empty( $variables[$callbackinfo] ) ) {
+      qbxml_set_deep_array_element($requestinfo, $info, $variables[$callbackinfo]);
+    }
   }
   return $requestinfo;
 }

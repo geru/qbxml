@@ -62,8 +62,8 @@ function qbxml_admin_operations_form() {
       "Class",
       "CustomerMsg",
       "CustomerType",
-      "StandardTerms",
-      "DateDrivenTerms",
+      // "StandardTerms",
+      // "DateDrivenTerms",
       "Terms",
       "VendorType",
       "JobType",
@@ -73,7 +73,7 @@ function qbxml_admin_operations_form() {
       "PriceLevel",
       "BillingRate",
     ),
-    "Data set" => array(
+    "Dataset" => array(
       "SalesRep",
       "ToDo",
     ),
@@ -160,7 +160,16 @@ function qbxml_admin_operations_form() {
   );
 
   foreach( $qb_list as $list => $listoptions ) {
-    $form[QBXML_FORM_REQUEST_BASE . $list] = array(
+    $grouping = 'group_' . $list;
+
+    $form[$grouping] = array(
+      '#type' => 'fieldset',
+      '#title' => t($list . ' data'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+    );
+
+    $form[$grouping][QBXML_FORM_REQUEST_BASE . $list] = array(
       '#title' => t($list),
       '#type' => 'select',
       '#options' => $listoptions,
@@ -225,22 +234,69 @@ function qbxml_admin_operations_form() {
     '#element_validate' => array('element_validate_integer_positive'),
   );
 
-  $form['advanced']['timedatefrom'] = array(
-    '#title' => t('Date from'),
-    '#type' => 'textfield',
-    '#description' => t('Date from (YYYY-MM-DD[ hh:mm:ss]'),
+  $form['advanced']['includeretelement'] = array(
+    '#title' => t('Include return element'),
+    '#type' => 'textarea',
+    '#description' => t('Which elements to return.'),
   );
 
-  $form['advanced']['timedateto'] = array(
-    '#title' => t('Date to'),
+  $form['advanced']['name'] = array(
+    '#title' => t('Name'),
     '#type' => 'textfield',
-    '#description' => t('Date to (YYYY-MM-DD[ hh:mm:ss]'),
+    '#default_value' => '',
+    '#description' => t('Name for query'),
   );
 
+  $form['advanced']['namerange'] = array(
+    '#title' => t('Name range'),
+    '#type' => 'textfield',
+    '#default_value' => '',
+    '#description' => t('Name range for query'),
+  );
+
+  $form['advanced']['From'] = array(
+    '#title' => t('From'),
+    '#type' => 'textfield',
+    '#description' => t('Dates in form YYYY-MM-DD[ hh:mm:ss]'),
+  );
+
+  $form['advanced']['To'] = array(
+    '#title' => t('To'),
+    '#type' => 'textfield',
+    '#description' => t('Dates in form YYYY-MM-DD[ hh:mm:ss]'),
+  );
+
+  $form['advanced']['includelineitems'] = array(
+    '#title' => t('Include line items'),
+    '#type' => 'checkbox',
+    '#default_value' => TRUE,
+    '#description' => t('Flag to include the line-items associated with a tally sheet.'),
+  );
+
+  $form['advanced']['includelinkedtxns'] = array(
+    '#title' => t('Include linked transactions'),
+    '#type' => 'checkbox',
+    '#default_value' => FALSE,
+    '#description' => t('Flag to include other transactions associated with this one.'),
+  );
+
+  $form['advanced'][QBXML_FORM_REQUEST_METADATA] = array(
+    '#title' => t('Metadata'),
+    '#type' => 'radios',
+    '#options' => array(
+      0 => 'Not set',
+      'NoMetaData' => 'No metadata',
+      'MetaDataOnly' => 'Metadata only',
+      'MetaDataAndResponseData' => 'Metadata & response data',
+    ),
+    '#default_value' => 0,
+    '#description' => t('Metadata to return, if any.'),
+  );
+  
   $form['advanced'][QBXML_FORM_RAWQUERY] = array(
     '#title' => t('raw QBXML query'),
     '#type' => 'textarea',
-    '#description' => t('Type properly formatted QBXML for the operation. NOT RECOMMENDED'),
+    '#description' => t('Properly formatted QBXML or query descriptor'),
   );
 
   $form['submit'] = array(
@@ -266,6 +322,23 @@ function qbxml_admin_operations_form_validate($form_id, &$form_state) {
   }
 }
 
+/*
+ * Recursively search and return first occurrence by key
+ */
+function _qbxml_array_find_by_key_recursive( $needle, $haystack ) {
+  if( !is_array($haystack) ) return false;
+  if( isset( $haystack[$needle] ) ) return $haystack[$needle];
+    else {
+      foreach ($haystack as $key => $value) {
+        $ret = _qbxml_array_find_by_key_recursive($needle, $value);
+        if ($ret) {
+          return $ret;
+        }
+      }
+    }
+  return false;
+}
+
 /**
  * Submit function for input_simple_form().
  **/
@@ -279,7 +352,8 @@ function qbxml_admin_operations_form_submit($form_id, &$form_state) {
     foreach ($form_state['values'][$listname] as $listindex) {
       $request = array();
 
-      $qbcmd_base = $form_state['complete form'][$listname]['#options'][$listindex];
+      // $qbcmd_base = $form_state['complete form'][$listname]['#options'][$listindex];
+      $qbcmd_base = _qbxml_array_find_by_key_recursive( $listname, $form_state['complete form'] )['#options'][$listindex];
       $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
       $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
 
