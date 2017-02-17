@@ -155,7 +155,7 @@ function theme_qbxml($var) {
       "Employee" => array( 'mask' => 0x76 ),
       "OtherName" => array( 'mask' => 0x76 ),
       "Vendor" => array( 'mask' => 0x77 ),
-      // "Entity" => array( 'mask' => 0x77 ), this encompasses all of the Parties, so commented just because it is too easy to duplicate queries.
+      "Entity" => array( 'mask' => 0x77 ), // this encompasses all of the Items, so commented if duplicate queries are getting generated
 
       "Account" => array( 'mask' => 0x76 ),
 
@@ -171,13 +171,13 @@ function theme_qbxml($var) {
       "ItemSalesTax" => array( 'mask' => 0x77 ),
       "ItemSalesTaxGroup" => array( 'mask' => 0x77 ),
       "ItemGroup" => array( 'mask' => 0x77 ),
-      // "Item" => array( 'mask' => 0x77 ), this encompasses all of the Items, so commented just because it is too easy to duplicate queries.
+      "Item" => array( 'mask' => 0x77 ), // this encompasses all of the Items, so commented if duplicate queries are getting generated
 
       "Class" => array( 'mask' => 0x6 ),
       "CustomerMsg" => array( 'mask' => 0x6 ),
       "CustomerType" => array( 'mask' => 0x6 ),
-      "StandardTerms" => array( 'mask' => 0x6 ),
-      "DateDrivenTerms" => array( 'mask' => 0x6 ),
+      "StandardTerms" => array( 'mask' => 0x6 ), // returned in Terms query
+      "DateDrivenTerms" => array( 'mask' => 0x6 ), // returned in Terms query
       "Terms" => array( 'mask' => 0x6 ),
       "VendorType" => array( 'mask' => 0x6 ),
       "JobType" => array( 'mask' => 0x6 ),
