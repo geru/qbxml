@@ -92,3 +92,10 @@ The Bc module provides data structures and importers for many Quickbooks dataset
 Therefore, if you install this module, the QBWC module, and the Bc and BcFeeds modules, you would have a fully working
 system for synchronizing data between Drupal and Quickbooks. You are also welcome to implement your own modules for
 storing and importing data.
+
+MAINTAINERS
+-----------
+
+Current maintainers:
+ * Hugh Kern (geru) - https://drupal.org/user/2778683
+
