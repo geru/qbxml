@@ -64,7 +64,7 @@ function qbxml_admin_operations_form() {
       "CustomerType",
       "StandardTerms",
       "DateDrivenTerms",
-      "Terms",
+      // "Terms", redundant if Standard and DateDriven terms are enabled
       "VendorType",
       "JobType",
       "PaymentMethod",
