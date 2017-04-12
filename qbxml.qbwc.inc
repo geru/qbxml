@@ -56,7 +56,7 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0, $ticket=NULL ) {
  * @param $company
  * @return null|string return value is the request to be sent: contents of pre-prepared file
  */
-function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML, $company) {
+function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML) {
   $ret = NULL;
   $query = db_select( 'qbxml', 'q' ) // look for requests currently pending for this ticket
     ->fields( 'q' )
