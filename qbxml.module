@@ -96,7 +96,9 @@ function qbxml_theme($existing, $type, $theme, $path) {
   foreach (array(
              'price_nocurrency',
              'bool_truefalse',
-             'field_value'
+             'field_value',
+             'term_name',
+             'camel_term_name',
            ) as $field) {
     $ret['qbxml_' . $field] = array(
       'template' => $field,
@@ -185,7 +187,7 @@ function theme_qbxml($var) {
       "ShipMethod" => array( 'mask' => 0x6 ),
       "SalesTaxCode" => array( 'mask' => 0x6 ),
       "PriceLevel" => array( 'mask' => 0x6 ),
-      "BillingRate" => array( 'mask' => 0x4 ),
+      "BillingRate" => array( 'mask' => 0x25 ),
 
       "SalesRep" => array( 'mask' => 0xe ),
       "ToDo" => array( 'mask' => 0xe ),
@@ -405,6 +407,9 @@ function _qbxml_array_to_xml(&$array, $parentkey = NULL, $attributes = '') {
   if (isset($array['@raw'])) {
     $raw = $array['@raw'];
   }
+  if (isset($array['@key']) && !$parentkey ) {
+    $parentkey = $array['@key'];
+  }
   $prefix = $parentkey ? '<' . $parentkey . ($attributes ? $attributes : '') . '>' : '';
   $postfix = $parentkey ? '</' . $parentkey . '>' : '';
   if (is_scalar($array)) {
@@ -430,17 +435,24 @@ function _qbxml_array_to_xml(&$array, $parentkey = NULL, $attributes = '') {
         }
       }
     } // will produce empty container if array is null
-    if ($buildup || $raw || $key) {
+    if ($buildup || $raw /*|| $key*/) {
       $output .= $prefix . $buildup . $raw . $postfix;
     }
   }
   return $output;
 }
 
-/*
- * generate arbitrarily deep nested array element
+/**
+ * Generate arbitrarily deep nested array element
+ * @param $ret
+ * @param $keys - key or array of keys of element to set
+ * @param $value
+ * 
  */
-function qbxml_set_deep_array_element(&$ret, array &$keys, $value) {
+function qbxml_set_deep_array_element(&$ret, $keys, $value) {
+  if( !is_array($keys) ) {
+    $keys = array( $keys );
+  }
   $key = array_shift($keys);
   if (!count($keys)) {
     $ret[$key] = $value;
@@ -457,9 +469,10 @@ function qbxml_set_deep_array_element(&$ret, array &$keys, $value) {
  * Output is stashed in @raw qbxml formatted string embedded in a qbxml renderable
  * array (this is different from a Drupal render array)
  */
-function qbxml_form_generate_qbxml(&$variables, $base, $opcode) {
+function qbxml_form_generate_qbxml(&$variables, $base, $alttheme, $opcode) {
   $vars = array(
     'qbxml_base' => $base,
+    'qbxml_type' => $alttheme,
     'qbxml_opcode' => $opcode,
     'values' => $variables
   );
@@ -493,7 +506,7 @@ function qbxml_form_generate_request_metadata(&$variables) {
  * Generate QB XML request from form
  * Returns a renderable QBXMLMsgsRq array
  */
-function qbxml_form_generate_request(&$variables, $base, $opcode) {
+function qbxml_form_generate_request(&$variables, $base, $alttheme, $opcode) {
   $requestcmd = $base . $opcode . 'Rq';
   $ret = array(
            $requestcmd => array(
@@ -501,9 +514,10 @@ function qbxml_form_generate_request(&$variables, $base, $opcode) {
              '@key' => $requestcmd,
              ),
          );
-  $ret[$requestcmd] = array_merge($ret[$requestcmd], qbxml_form_generate_qbxml($variables, $base, $opcode));
+  $ret[$requestcmd] = array_merge($ret[$requestcmd], qbxml_form_generate_qbxml($variables, $base, $alttheme, $opcode));
   return $ret;
 }
+
 
 /*
  * Generate QBXMLMsgsRq from set of requests
@@ -535,12 +549,13 @@ function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
         $actualrequest['@request']['callback'] = array(
           'importer' => QBXML_DEFAULT_IMPORTER,
           'feedsprefix' => QBXML_FEEDS_PREFIX,
-          'importtermmapper' => 'bc_importtermmapper'
+          'importtermmapper' => 'bc_importtermmapper',
+          'editsequence' => 'bc_editsequencelookup'
         );
       }
       $actualrequest['@request']['parent'] = array(
-          'key' => $qbxmlmsgsrq['@key'],
-          'attributes' => isset($qbxmlmsgsrq['@attributes']) ? $qbxmlmsgsrq['@attributes'] : array(),
+          '@key' => $qbxmlmsgsrq['@key'],
+          '@attributes' => isset($qbxmlmsgsrq['@attributes']) ? $qbxmlmsgsrq['@attributes'] : array(),
         );
       $actualrequest['@request']['key'] = $actualkey;
       
@@ -553,6 +568,13 @@ function qbxml_action_add_xml_array_to_out_queue($bookid, $qbxmlmsgsrq) {
   }
   $qbxmlmsgsrq = array('QBXMLMsgsRq' => $qbxmlmsgsrq);
   $xmlstr = _qbxml_array_to_xml($qbxmlmsgsrq, 'QBXML');
+
+  // set EditSequence using callback if the callback exists.
+  if( !empty($actualrequest['@request']['callback']['editsequence']) && function_exists($actualrequest['@request']['callback']['editsequence']) ) {
+    $function = $actualrequest['@request']['callback']['editsequence'];
+    $xmlstr = preg_replace_callback('/<EditSequence>(.*?)<\/EditSequence>/', $function, $xmlstr );
+  }
+
   file_unmanaged_save_data($xmlstr, _qbxml_filename($bookid, $groupID, 'q'), FILE_EXISTS_REPLACE);
 }
 
@@ -563,4 +585,13 @@ function qbxml_camelterm_to_array( $camelterm ) {
   $camelarray = array();
   $ret = preg_match_all( '/[A-Z][a-z]+/', $camelterm, $camelarray ); 
   return( $ret == FALSE ? array() : $camelarray[0] );
+}
+
+/**
+ * Convert lower-case string of words to camelcase word
+ * @param $lcstring
+ * @return string
+ */
+function qbxml_string_to_camelterm( $lcstring ) {
+  return( strtr( ucwords( $lcstring ), array(' ' => '') ) );
 }

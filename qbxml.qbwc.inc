@@ -16,6 +16,7 @@ function _qbxml_request_sendtime_set_init( $rid ) {
   return $num;
 }
 */
+
 /*
  * Update the send-time for a request
  */
@@ -25,6 +26,17 @@ function _qbxml_request_sendtime_update( $rid ) {
     ->condition( 'rid', $rid )
     ->execute();
   return $num;
+}
+
+/*
+ * Delete messages with ticket marked as sent or iterating (when error happens)
+*/
+function _qbxml_request_close_error_ticket($bookid, $ticket) {
+  db_delete('qbxml')
+    ->condition('ticket', $ticket)
+    ->condition('bookid', $bookid)
+    ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING ), 'IN' )
+    ->execute();
 }
 
 /*
@@ -40,7 +52,7 @@ function _qbxml_request_set_state( $rid, $state, $bookid=0, $ticket=NULL ) {
   }
   else {
     $num = db_update( 'qbxml' ) // update by bookid and ticket this is for setting error state when connection is closed unexpectedly
-      ->fields(array('state' => $state, 'ticket'=>'' ))
+      ->fields(array('state' => $state, 'ticket'=>NULL ))
       ->condition( 'bookid', $bookid )
       ->condition( 'ticket', $ticket )
       ->condition( 'state', array(QBXML_STATE_SENT, QBXML_STATE_ITERATING ), 'IN' ) // ignore requests that are queued or already done, but unprocessed, or marked as error
@@ -65,7 +77,7 @@ function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML) {
     ->condition( 'ticket', array($sendRequestXML->ticket) )
     ->orderBy( 'q.rid', 'ASC' )
     ->execute();
-  if( !$recs = $query->rowCount() ){ // if none found, look for any available requests for the bookid
+  if( !($recs = $query->rowCount()) ){ // if none found, look for any available requests for the bookid
     $query = db_select( 'qbxml', 'q' )
       ->fields( 'q' )
       ->condition( 'bookid', $bookid )
@@ -74,19 +86,43 @@ function qbxml_qbwc_sendRequestXML($bookid, $sendRequestXML) {
       ->orderBy( 'q.rid', 'ASC' )
       ->execute();
   }
-  $recs = $query->rowCount();
   while( $query->rowCount() ) {
-    $result = $query->fetchAssoc();
-    $filename = _qbxml_filename( $bookid, $result['rid'], 'q' );
-    if( !file_exists($filename) ) {
-      _qbxml_request_set_state( $result['rid'], QBXML_STATE_ERROR );
-      watchdog('QBXML', t('Request file not found for Request[:rid]',array(':rid' => $result['rid'])));
-      continue;
+    if( !($result = $query->fetchAssoc()) ) {
+      break;
     }
-    $handle = fopen($filename, "r");
-    $ret = fread($handle, filesize($filename));
-    fclose($handle);
-    file_unmanaged_delete($filename);
+    $requestID = $result['rid'];
+    $filename = _qbxml_filename( $bookid, $requestID, 'q' );
+    if( $result['state'] == QBXML_STATE_REQUEUE ) {
+      $data = json_decode($result['data'], TRUE);
+      $request = $data['request'];
+      if( empty($request['@attributes']) ) {
+        $request['@attributes'] = array();
+      }
+      $request['@attributes'] += array( 'requestID' => $requestID );
+      $parent = $request['@request']['parent'];
+      $parent[ $request['@key'] ] = $request;
+      $newrequest = array( $parent['@key'] => $parent );
+      $ret = _qbxml_array_to_xml($newrequest, 'QBXML');
+    } else {
+      if (!file_exists($filename)) {
+        _qbxml_request_delete($bookid, $requestID);
+        watchdog('QBXML', t('Request file not found for Request[:rid]', array(':rid' => $requestID)));
+        continue;
+      }
+      $handle = fopen($filename, "r");
+      $ret = fread($handle, filesize($filename));
+      fclose($handle);
+      file_unmanaged_delete($filename);
+    }
+    if( !$ret ) {
+      _qbxml_request_delete($bookid, $requestID);
+      watchdog('QBXML', t('Empty request for Request[:rid]', array(':rid' => $requestID)));
+    }
+    if( !empty($request['@request']['callback']['editsequence']) && function_exists($request['@request']['callback']['editsequence']) ) {
+      // handle callback setting of editsequence from entity id, so the edit sequence will be current
+      $function = $request['@request']['callback']['editsequence'];
+      $ret = preg_replace_callback('/<EditSequence>(.*?)<\/EditSequence>/', $function, $ret );
+    }
     if( !$result['gid'] ) { // owner of group and all requests getting sent
       db_update( 'qbxml' ) // the very first time, the gid of the parent request is not set. Update all children requests in one fell swoop
       ->fields( array('state' => QBXML_STATE_SENT,
@@ -141,7 +177,7 @@ function qbxml_feeds_import( &$request, $item ){
   while( $camelarray ) {
     $feedid = $feedsprefix . $importtermmapper(implode($camelarray));
     $lastterm = array_pop($camelarray);
-    // stash the last term in the request as an attribute
+    // if desired, can stash the last term in the request as an attribute
     // $item['@response']['tag'][] = $lastterm;
     if (isset(_feeds_importer_digest()[$feedid]) && ($source = feeds_source($feedid))) {
       if ($source->importer->fetcher->hasSourceConfig()) {
@@ -153,7 +189,11 @@ function qbxml_feeds_import( &$request, $item ){
           $filename = file_unmanaged_save_data($item->asXML(), $filename);
           $sourceconfig['FeedsFileFetcher']['source'] = $filename;
 
+          // This is how to force it to never do background processing. Not a bad idea since this happens
+          // in the background anyway and cron happens only so often, but it is a way to spread out the load
+          // to allow background processing
           // $source->importer->addConfig( array( 'process_in_background' => FALSE ) ); // let it keep setting from .inc file
+          
           $source->setConfig($sourceconfig);
           if ($importerconfig['process_in_background']) {
             variable_set('qbxml_feeds_process_limit', variable_get('feeds_process_limit', 50)); // If uncommented, this shows how to alter the chunk sizes for cron to process in background
@@ -209,8 +249,9 @@ function qbxml_import( $bookid, $response ) {
           $request['@attributes']['iterator'] = 'Continue';
           $request['@attributes']['iteratorID'] = $item->attributes()->iteratorID;
           $newrequest = array(
-            $request['@request']['parent']['key'] => array(
-              '@attributes' => $request['@request']['parent']['attributes'],
+            $request['@request']['parent']['@key'] => array(
+              '@attributes' => $request['@request']['parent']['@attributes'],
+              '@key' => $request['@request']['parent']['@key'],
               $request['@request']['key'] => $request,
             )
           );
@@ -219,6 +260,12 @@ function qbxml_import( $bookid, $response ) {
           $deleterequest = FALSE;
           _qbxml_request_set_state( $requestID, QBXML_STATE_ITERATING );
         }
+      }
+      // check for error 3200, which means that a data collision happened and set state to requeue
+      // current record will update here and then the change request gets re-queued to go out again
+      if( !empty($item->attributes()->statusCode) && $item->attributes()->statusCode == '3200' ) {
+        _qbxml_request_set_state( $requestID, QBXML_STATE_REQUEUE );
+        $deleterequest = FALSE;
       }
 
       // send to hook that does generic processing
@@ -297,6 +344,8 @@ function qbxml_qbwc_receiveResponseXML($bookid, $response = NULL, $data) {
       // error has happened and is described in hresult and message
       watchdog('QBXML', "Quickbooks error Book#$bookid\n" . print_r($response, true));
       // @todo: set event or flag for admin
+      // look for ticket with state s and set to error
+      _qbxml_request_close_error_ticket( $bookid, $response->ticket );
     }
     else {
       $ret = qbxml_import($bookid, $response);

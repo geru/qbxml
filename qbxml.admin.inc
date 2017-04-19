@@ -71,7 +71,7 @@ function qbxml_admin_operations_form() {
       "ShipMethod",
       "SalesTaxCode",
       "PriceLevel",
-      "BillingRate",
+      // "BillingRate", QB returning errors, revisit when needed
     ),
     "Dataset" => array(
       "SalesRep",
@@ -355,7 +355,7 @@ function qbxml_admin_operations_form_submit($form_id, &$form_state) {
       // $qbcmd_base = $form_state['complete form'][$listname]['#options'][$listindex];
       $qbcmd_base = _qbxml_array_find_by_key_recursive( $listname, $form_state['complete form'] )['#options'][$listindex];
       $qbcmd_opcode = $form_state['complete form'][QBXML_FORM_REQUEST_OPCODE]['#options'][$form_state['values'][QBXML_FORM_REQUEST_OPCODE]];
-      $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_opcode);
+      $request[] = qbxml_form_generate_request($form_state['values'], $qbcmd_base, $qbcmd_base, $qbcmd_opcode);
 
       qbxml_action_add_xml_array_to_out_queue($form_state['values']['bookid'], qbxml_generate_qbxmlmsgsrq($request));
     }
